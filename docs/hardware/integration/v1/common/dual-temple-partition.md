@@ -1,37 +1,31 @@
 # 银龄智护 V1 双镜腿分区架构
 
-## 目的
+## 当前状态
 
-V1 最终产品为眼镜形态，电子器件主要布置在左右两个镜腿。由于重量、体积和佩戴舒适性约束，不能把主控、电池、Camera、Audio、Haptic 等全部堆在同一个镜腿。
+`ARCHITECTURE_FROZEN / FPC_MECHANICAL_PENDING / MAGNETIC_FOOTPRINT_PENDING`
 
-因此，从原理图阶段开始就把整机视为 **A / B 两个物理电子分区**，中间通过一条跨镜框 FPC / 排线连接，而不是等到 PCB 阶段再临时把单板网络切成两块。
+2026-08-27 起，本文件采用 **8Pin 中央 FPC + A 侧主动电子集中 + B 侧被动端点** 架构。此前 12Pin / B 侧 DRV2605L 方案保留在 Git 历史和 D-014 中，不再作为当前 PCB 输入。
 
-本方案适用于 Plan A ESP32-S3 与 Plan B BK7258，两套主控尽量保持相同的物理功能分区。
+A / B 当前仍是工程分区名，不强制绑定左/右镜腿。
 
-> A / B 当前是工程分区名，不强行等同“左镜腿 / 右镜腿”。最终左右方向由 Camera 视角、磁吸接口位置、佩戴结构和工业设计决定。
+## 设计目标
 
-## 核心设计目标
-
-优先级如下：
-
-1. **重量分配**：电池与主逻辑板分居两侧，避免单边过重；
-2. **跨镜腿线数尽量少**；
-3. **高速 / 敏感信号尽量不跨镜腿**：Camera DVP、主 I²S、USB、RF 优先留在 A 侧；
-4. **左右执行器尽量就近放置**：左/右 LRA、Bone 各在对应镜腿；
-5. **电源跨线可以接受，但必须按电流设计 FPC 铜宽和并联 Pin**；
-6. 原理图必须明确 A/B Board Boundary 与 FPC Connector，不允许先画成“单板逻辑”再到 PCB 阶段随意拆分。
+1. 电池与主逻辑分居两侧，用电池作为主要配重；
+2. 中央 FPC 导体数量尽可能少；
+3. Camera DVP、USB、I2S、I2C、RF 等高速/敏感数字信号不跨镜腿；
+4. B 板尽量被动化，减少远端供电、总线和主动 IC 故障点；
+5. 保留双 Bone、双 LRA、双 DRV2605L 独立控制等既定功能；
+6. BAT+/GND 用双 Pin 并联保证原型阶段的电源可靠性。
 
 ---
 
-## 冻结的首版分区
-
-### A 区 — MAIN / SENSING TEMPLE
-
-A 区是主逻辑、高速信号与主要电源管理侧。
+## A 区 — MAIN / SENSING / POWER / DRIVER
 
 ```text
 A TEMPLE
 ├── MCU / SoC
+│   ├── A-ESP: ESP32-S3-MINI-1U-N4R2
+│   └── A-BK : BK7258QN88616
 ├── RF / antenna interface
 ├── OV5640 + Camera FPC
 ├── Camera 2.8V / Core LDO
@@ -39,273 +33,283 @@ A TEMPLE
 ├── BMI270
 ├── PCA9540B
 ├── DRV2605L A
+├── DRV2605L B
 ├── LRA A
 ├── MAX98357A
 ├── Bone A
-├── 4Pin Magnetic USB/Charge connector
-├── USB ESD / input protection
-├── Charger / Power Path
-├── SYS_3V3 regulator
+├── BQ24074 Charger / PowerPath
+├── TPS63021 SYS_3V3
+├── 4Pin Magnetic USB/Charge interface
+├── USB ESD / 5V protection
 ├── BOOT / EN / UART / Debug TP
-└── Inter-temple FPC connector A
+└── J_INTER_A 8Pin
 ```
 
-A 区承担：
+A 侧承担所有主动控制、高速接口和电源管理。
+
+### A 侧明确不跨镜腿的网络
 
 - Camera DVP / SCCB；
-- MIC I²S；
-- MAX98357A I²S；
-- Native USB；
-- Wi-Fi / BLE / RF；
-- BMI270；
-- PCA9540B 上游；
-- 本侧 Haptic；
-- 整机主要 Power Path / Regulation。
+- USB D+ / D-；
+- MCU RF；
+- MIC I2S；
+- MAX98357A I2S；
+- SENSOR_I2C；
+- PCA9540B CH0 / CH1 I2C；
+- 双 DRV2605L IN/TRIG；
+- SYS_3V3。
 
-### B 区 — BATTERY / REMOTE ACTUATOR TEMPLE
+---
 
-B 区以电池和远端执行器为主，用于分担重量，同时避免重复 MCU / Audio / Camera 等大功能块。
+## B 区 — BATTERY / REMOTE ENDPOINT
 
 ```text
 B TEMPLE
 ├── 1S LiPo Battery
-├── Battery connector / NTC interface
-├── DRV2605L B
-├── LRA B
+├── Battery connector
 ├── Bone B
-├── PCA9540B CH1 downstream pull-up / local decoupling
-├── local 3V3 bulk / bypass capacitors
-├── local TP_GND / TP_3V3
-└── Inter-temple FPC connector B
+├── LRA B
+├── optional TP_BAT_B / TP_GND_B
+└── J_INTER_B 8Pin
 ```
 
-B 区不放：
+B 侧当前不放：
 
-- Camera DVP；
 - MCU；
-- USB PHY / Magnetic USB connector；
-- RF；
-- I²S Audio AMP；
-- Camera multi-rail regulator。
+- Camera；
+- MAX98357A；
+- PCA9540B；
+- DRV2605L；
+- 3V3 regulator；
+- I2C pull-up；
+- Trigger logic；
+- USB / Magnetic interface。
 
-目的是避免这些高速/敏感网络跨过整副眼镜。
-
----
-
-## 为什么电池放 B，主控放 A
-
-电池通常是整机最重的单个部件，而 MCU、传感器、LDO、MUX 等 IC 单颗质量较低。
-
-因此把：
-
-```text
-A：主控 + Camera + MIC + IMU + AMP + Power IC
-B：Battery + 远端 Haptic + 远端 Bone
-```
-
-分开，比“Battery + MCU + Camera 全放同一侧”更有利于左右重量平衡。
-
-最终是否达到平衡不能只凭 BOM 判断。机械样机阶段必须称重：
-
-- A 侧 PCB + 器件 + 执行器 + 外壳；
-- B 侧 Battery + PCB + 执行器 + 外壳。
-
-优先通过 **电池尺寸 / 电池在镜腿前后方向的位置** 调整重心，不优先为了配重把 Camera DVP / USB / RF 等高速块搬到另一侧。
+B 板因此成为 **Battery + Remote Endpoint Board**。
 
 ---
 
-## 为什么磁吸 USB 放 A
+## 8Pin Inter-Temple FPC — 冻结 Pin Map
 
-磁吸口仍放 A，靠近 MCU / Native USB / Charger。
+| Pin | Net | 方向 | 说明 |
+|---:|---|---|---|
+| 1 | BAT+ | B → A | 与 Pin2 并联 |
+| 2 | BAT+ | B → A | 与 Pin1 并联 |
+| 3 | GND | A ↔ B | 与 Pin4 并联 |
+| 4 | GND | A ↔ B | 与 Pin3 并联 |
+| 5 | SPK_P | A → B | MAX98357A → Bone B |
+| 6 | SPK_N | A → B | MAX98357A → Bone B |
+| 7 | LRA_B_P | A → B | DRV2605L-B → LRA B |
+| 8 | LRA_B_N | A → B | DRV2605L-B → LRA B |
 
-这样：
+逻辑 Pin 数和网络已经冻结。
 
-```text
-MAG_USB → ESD → MCU USB D+/D-
-```
+尚未冻结：
 
-保持本地，不需要把 USB D+/D- 通过跨镜腿 FPC 走一整圈。
+- 具体 FPC 型号；
+- Pitch；
+- 长度；
+- 铜厚；
+- 连接器系列；
+- 动态弯折寿命；
+- 机械方向 / Pin1 朝向。
 
-代价是：Battery 位于 B，因此 `BAT+ / GND` 需要通过 FPC 往返 A 区 Charger / Power Path。
-
-V1 接受这一取舍，因为电源线可以通过：
-
-- 加宽 FPC 铜线；
-- 多 Pin 并联；
-- 充分 GND 回流；
-
-解决，而高速 USB / DVP / I²S 跨长 FPC 会带来更明显的 SI / EMI / 调试风险。
-
----
-
-## Haptic 的跨镜腿方式
-
-PCA9540B 放 A 区。
-
-```text
-A SENSOR_I2C
-   ├── BMI270
-   └── PCA9540B
-          ├── CH0 → DRV A → LRA A   （全部本地）
-          └── CH1 → FPC → DRV B → LRA B
-
-MCU HAPTIC_B_TRIG → FPC → DRV B IN/TRIG
-```
-
-因此 B 侧 Haptic 只需要跨：
-
-- CH1 SDA；
-- CH1 SCL；
-- HAPTIC_B_TRIG；
-- SYS_3V3；
-- GND。
-
-DRV B 的 EN 默认在 B 侧本地处理，不为了 EN 再额外占一根 FPC 信号线；如果后续确需 MCU 控制 EN，可使用 FPC 预留 Pin。
+这些属于 `MECHANICAL_PENDING`。
 
 ---
 
-## Bone Audio 的跨镜腿方式
+## 为什么从 12Pin 改为 8Pin
 
-MAX98357A 放 A 区，避免 I²S 跨镜腿。
-
-```text
-MAX98357A
-   ├── SPK+ / SPK- → Bone A（本地）
-   └── SPK+ / SPK- → FPC → Bone B
-```
-
-因此跨镜腿仅增加一对差分 Class-D 输出：
-
-- `SPK_P`；
-- `SPK_N`。
-
-它们必须按差分对思路布线，避免与敏感 I²C 线长距离平行耦合；最终 FPC pin ordering 在 PCB/SI 阶段根据实际连接器和铜宽进一步调整。
-
-Bone 任意一端继续禁止接 GND。
-
----
-
-## Inter-Temple FPC 基线
-
-当前建议：**12 conductor baseline**。
-
-它不是说整机必须最终使用 12Pin FPC，而是给首版原理图/PCB留下足够可靠性余量。
-
-逻辑上需要的核心网络约 8 类：
+旧 12Pin 方案把 DRV2605L-B 放在 B，因此中央需要额外传：
 
 ```text
-BAT+
-GND
 SYS_3V3
 HAPTIC_B_SCL
 HAPTIC_B_SDA
 HAPTIC_B_TRIG
-SPK_P
-SPK_N
 ```
 
-物理上增加：
-
-- BAT+ 并联 Pin；
-- GND 并联 Pin；
-- BAT_NTC / TEMP 预留；
-- 1 根 Spare。
-
-详见 `inter-temple-fpc.csv`。
-
-在电源峰值预算完成后，可决定：
-
-- 保留 12Pin；
-- 或在确认电流与温升后缩减到更少 Pin。
-
-禁止在不知道电流的情况下为了“线越少越好”强行只给 BAT+/GND 各一条很窄的 FPC 导体。
-
----
-
-## 两块 PCB 的测试点策略
-
-原先“TP 必须精简”规则继续有效，但双板以后需要按 Board Boundary 调整：
-
-### A 板 Mandatory
-
-- TP_GND_A；
-- TP_3V3_A；
-- TP_EN / RESET；
-- TP_BOOT / DOWNLOAD。
-
-Recommended：
-
-- TP_UART_TX；
-- TP_UART_RX；
-- TP_VBAT_A；
-- TP_5V_A。
-
-### B 板 Mandatory
-
-- TP_GND_B；
-- TP_3V3_B。
-
-Optional：
-
-- TP_BAT_B；
-- HAPTIC_B SDA/SCL；
-- HAPTIC_B_TRIG。
-
-原因：如果 FPC / connector / remote rail 出问题，只在 A 板留 TP 无法快速判断 B 板是否实际得到电源。
-
----
-
-## FPC / 机械设计规则
-
-1. FPC / 排线必须从原理图开始作为正式 Connector，不是 PCB 阶段的“临时飞线”；
-2. FPC 两端应使用清晰功能名，例如 `J_INTER_A` / `J_INTER_B`；
-3. 必须区分逻辑 Net 与物理并联 Pin，例如 BAT+ 可占 2 个 Pin；
-4. 经过镜腿铰链/动态弯折区域时，需选支持反复弯折的 FPC/Flex 结构并给出最小弯折半径；
-5. 器件、焊盘、过孔不放在动态弯折区；
-6. 电源大电流线优先加宽/并联；
-7. Class-D `SPK_P/N` 作为差分输出成对走线；
-8. I²C/Trigger 与 Class-D 线尽量隔开，必要时使用 GND Pin 做回流/隔离；
-9. 最终 Pin Order 需在 PCB 阶段结合 SI/EMI 和连接器机械方向冻结；
-10. FPC 断开时，A/B 两板不能因浮空信号进入危险状态；B 侧 Driver 的 EN / Trigger 必须有明确默认态。
-
----
-
-## 对下一版原理图的强制要求
-
-下一版 EDA Skill / Codex 不允许继续生成“看起来是一张单板”的逻辑原理图后再随意拆 PCB。
-
-原理图必须明确：
+新方案把 DRV2605L-B 搬回 A，只跨：
 
 ```text
-[A TEMPLE / MAIN BOARD]
-        │
-        │ J_INTER_A
-        ║  Inter-Temple FPC
-        │ J_INTER_B
-        ▼
-[B TEMPLE / REMOTE BOARD]
+LRA_B_P
+LRA_B_N
 ```
 
-并且自动输出：
+因此取消 4 根逻辑/控制线，增加 2 根 LRA 差分驱动线，净减少 2 根；同时 BAT_NTC 和 Spare 也不再占中央 Pin，最终由 12Pin 收敛为 8Pin。
 
-- A/B Component Partition；
-- Inter-Temple Net List；
-- FPC Pin Map；
-- 跨板电源网络；
-- 跨板信号网络；
-- 每块板独立 TP；
-- 跨板 Connector ERC / Netlist Audit。
+主要收益：
 
-任何新增器件都必须回答：
+- I2C 不跨镜框；
+- Trigger 不跨镜框；
+- B 板不再需要 3V3；
+- B 板主动器件减少；
+- FPC 更窄、连接器更容易小型化；
+- Bring-up 故障点减少。
 
-1. 放 A 还是 B？
-2. 为什么？
-3. 是否会增加跨镜腿线数？
-4. 是否把高速/敏感信号带过 FPC？
-5. 是否破坏重量分配？
+主要代价：
 
-## 当前状态
+- DRV2605L-B 到 LRA-B 的驱动线变长；
+- 不再有 BAT_NTC 中央通道；
+- 无 Spare Pin；
+- 后续跨镜腿扩展能力下降。
 
-`ARCHITECTURE_BASELINE / MECHANICAL_VALIDATION_PENDING`
+---
 
-该分区方案现在可以作为下一版原理图的输入基线；最终 A/B 实际对应左/右镜腿、FPC 型号、Pin pitch、长度、弯折寿命和重量平衡需在机械样机阶段验证。
+## Haptic 架构
+
+```text
+A SENSOR_I2C
+├── BMI270 @0x68
+└── PCA9540B @0x70
+      ├── CH0 → DRV2605L A @0x5A → LRA A
+      └── CH1 → DRV2605L B @0x5A → 8Pin FPC → LRA B
+
+MCU GPIO → DRV A IN/TRIG
+MCU GPIO → DRV B IN/TRIG
+```
+
+两颗 DRV2605L 的 I2C、Trigger、VDD bypass 和 REG capacitor 全部留在 A。
+
+### 远端 LRA 风险 Gate
+
+首板必须验证：
+
+- Auto Calibration；
+- Back-EMF / resonance tracking；
+- 启动/制动；
+- 波形库效果；
+- 连续运行；
+- FPC 线阻导致的振动强度变化。
+
+若 8Pin FPC 实际长度/线宽导致明显性能下降，再讨论 Driver 是否需要重新远端化；首版不提前回退。
+
+---
+
+## Bone Audio 架构
+
+```text
+MCU I2S → MAX98357A A
+               ├── SPK_P/N → Bone A
+               └── SPK_P/N → FPC → Bone B
+```
+
+两个 Bone 继续播放相同单声道。
+
+`SPK_P / SPK_N` 为 BTL/Class-D 差分输出，禁止任一端接 GND。
+
+---
+
+## 电源与充电架构
+
+当前冻结：
+
+```text
+4Pin Magnetic USB/Charge → A
+BQ24074                  → A
+TPS63021                  → A
+Battery                   → B
+```
+
+电池通过中央 FPC：
+
+```text
+BAT+ ×2 → A
+GND  ×2 → A/B主回流
+```
+
+### 为什么磁吸接口放 A
+
+磁吸接口逻辑功能保持：
+
+```text
+5V
+GND
+USB D+
+USB D-
+```
+
+放 A 可以让 USB D+/D- 直接连接 MCU，避免高速 USB 跨镜框。
+
+### 当前磁吸接口仍未冻结的内容
+
+由于尚未找到满足机械需求的具体磁吸连接器，目前不冻结：
+
+- 型号；
+- 长宽高；
+- Footprint；
+- PCB边缘开口；
+- 外壳开孔；
+- 安装方向。
+
+其**逻辑位置在 A**已经冻结。
+
+### Battery NTC
+
+当前 8Pin 不包含 BAT_NTC。
+
+如果首版 BQ24074 不读取电池包 NTC，则 TS 必须在 A 板按数据手册做合法本地偏置/处理，不允许悬空。
+
+---
+
+## FPC 电源可靠性 Gate
+
+BAT+ 和 GND 各使用两个并联 Pin 的原因是载流和接触可靠性，而不是不同电压。
+
+选择具体 FPC/连接器后必须核算：
+
+- 单 Pin 额定电流；
+- BAT+ 两 Pin 总载流；
+- GND 两 Pin 总回流；
+- 铜阻；
+- Connector contact resistance；
+- 峰值压降；
+- 温升。
+
+若具体器件证明 8Pin 无法满足峰值载流，应优先更换更高额定电流的 8Pin FPC/连接器或加宽铜导体，而不是未经评估直接改回 12Pin。
+
+---
+
+## A/B 重量原则
+
+功能数量不要求左右相等。
+
+A 放主动电子和高速信号；B 放 Battery + Bone B + LRA B。由于 Battery 通常是最大的单体质量块，重量平衡由机械样机实际称重决定，不用 IC 数量判断。
+
+后续通过：
+
+- Battery 容量 / 形状；
+- Battery 在镜腿前后位置；
+- PCB 长度；
+- 外壳体积分布；
+
+微调重心。
+
+---
+
+## 原理图 / PCB 强制要求
+
+原理图必须保持两个独立板级设计单元：
+
+```text
+[A-ESP or A-BK]
+       │
+   J_INTER_A
+       ║ 8Pin FPC
+   J_INTER_B
+       │
+ [B-COMMON]
+```
+
+禁止 A/B 元件继续处在同一 PCB NetGraph。
+
+Board B 当前无 SYS_3V3、I2C、Trigger，因此旧 B 侧这些器件/网络不得被旧模板重新带入。
+
+任何自动化或人工检查都应以：
+
+- `decision-log.md` D-015；
+- `inter-temple-fpc.csv`；
+- `temple-partition.csv`；
+- `reviews/20260827-8pin-two-temple-architecture-freeze.md`；
+
+作为当前最高优先级架构输入。
