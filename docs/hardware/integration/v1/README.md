@@ -149,17 +149,28 @@ V1 开发板采用“最少但可救板”的测试点策略：
 - [`plan-b-bk7258qn88616/`](./plan-b-bk7258qn88616/)：BK7258 方案；
 - [`references/`](./references/)：原厂资料和历史实验资料。
 
-## 下一步
+## 当前执行方式（2026-08-26更新）
 
-**当前已经满足进入新版原理图更新绘制的架构条件。**
+当前产品原型进入人工PCB冲刺阶段。旧自动生成 `.eprj2` 保留为电气参考和问题样本，但不直接作为最终PCB生成源。
 
-下一步固定为：
+本轮并行保留：
 
-1. 以 `common/design-requirements.md`、`common/decision-log.md` 和两套 `pin-matrix.csv` 为输入；
-2. 更新 / 重绘 Plan A 和 Plan B 原理图；
-3. 原理图中实现 PCA9540B + 双 DRV2605L + 双 LRA；
-4. 实现 MAX98357A + 两个 Bone 物理接口；
-5. 加入精简 TP / Recovery；
-6. 从 EDA **实时导出 Netlist**；
-7. 做 Requirements / Pin Matrix / BOM / Netlist / ERC 一致性审计；
-8. 审计通过后再进入 PCB。
+```text
+A-ESP      → ESP32-S3主控A板
+A-BK       → BK7258主控A板
+B-COMMON   → 两套主控尽量共用的B板
+```
+
+执行节奏：
+
+1. 8/26晚冻结三板边界、FPC、连接器和关键机械边界；
+2. 8/27完成三份人工原理图；
+3. 8/28完成三块PCB、生产检查、BOM/CPL并下单；
+4. 8/29–9/1等待PCB期间重点完成3D眼镜结构和PPG心率/血氧实验方案；
+5. 目标9/2 PCB到货；若未到，依赖实板的测试任务整体顺延1天；
+6. 到货后用两天完成焊接、烧录、基础通讯、关键外围、FPC/双板和装壳测试；
+7. 测试后再根据真实结果冻结后续实验计划。
+
+完整当前计划：[`reviews/20260826-prototype-sprint-plan.md`](./reviews/20260826-prototype-sprint-plan.md)。
+
+此前的双PCB边界、外围Ownership和Harness审查仍作为工程规则继续有效：[`reviews/20260810-next-step-two-board-schematic-plan.md`](./reviews/20260810-next-step-two-board-schematic-plan.md)。
