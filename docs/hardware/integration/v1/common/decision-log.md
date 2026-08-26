@@ -81,7 +81,7 @@ Optional：TP_5V、TP_VBAT、关键 Bus/Rail。
 
 ### D-007 4Pin 磁吸
 
-V1 继续使用：
+V1 逻辑接口继续使用：
 
 - 5V；
 - GND；
@@ -90,7 +90,9 @@ V1 继续使用：
 
 用于充电、Native USB 烧录、日志和开发数据。
 
-状态：`CONFIRMED`。
+2026-08-27 进一步冻结：接口位于 A 板，靠近 MCU USB / BQ24074；具体磁吸器件型号、尺寸、封装、板边位置和外壳开口仍待找到合适实际器件后确定。
+
+状态：`LOGIC_AND_SIDE_CONFIRMED / MECHANICAL_FOOTPRINT_PENDING`。
 
 ### D-008 Camera FPC
 
@@ -137,54 +139,94 @@ BK7258 GPIO 余量足够，不需要为了省 2 个 GPIO 强制共用同一组�
 
 状态：`PIN_MATRIX_FROZEN`。
 
-### D-014 双镜腿 A/B 物理分区
+### D-014 双镜腿 A/B 物理分区（历史基线）
 
-产品最终为眼镜形态，电子器件必须分布在两个镜腿，通过跨镜框 FPC / 排线互连。该约束从原理图阶段开始执行，不允许等到 PCB 阶段再把“单板原理图”临时拆开。
+产品最终为眼镜形态，电子器件必须分布在两个镜腿，通过跨镜框 FPC / 排线互连。此前首版基线为 A 主逻辑、B 电池 + 远端 DRV2605L，中央使用 12 conductor FPC。
 
-当前冻结首版分区：
+该决策中的“双板边界、Battery 与主逻辑分居、高速信号不跨镜腿”原则继续有效；其 **12Pin FPC、B 侧 DRV2605L、B 侧 SYS_3V3/I2C/Trigger** 已被 D-015 替代。
 
-**A — MAIN / SENSING TEMPLE**
+状态：`SUPERSEDED_BY_D-015`。
 
-- MCU / SoC + RF / 启动 /下载；
+## 2026-08-27 新冻结决策
+
+### D-015 8Pin 双镜腿 + B 被动端点架构
+
+Supersedes：`D-014` 中的 12Pin FPC 与 B 侧主动 Haptic Driver 分区。
+
+当前首版固定为：
+
+**A — MAIN / SENSING / POWER / DRIVER**
+
+- MCU / SoC + RF / 启动 / 下载；
 - OV5640 + Camera FPC；
 - Camera 2.8V / Core LDO；
 - ICS-43434；
 - BMI270；
 - PCA9540B；
-- DRV2605L A + LRA A；
-- MAX98357A + Bone A；
-- 4Pin Magnetic USB + ESD；
-- Charger / Power Path；
-- SYS_3V3 regulator；
+- DRV2605L A；
+- DRV2605L B；
+- LRA A；
+- MAX98357A；
+- Bone A；
+- BQ24074 Charger / PowerPath；
+- TPS63021 SYS_3V3；
+- 4Pin Magnetic USB/Charge + ESD/5V protection；
 - 主 Debug / Recovery TP；
-- Inter-temple connector A。
+- J_INTER_A 8Pin。
 
-**B — BATTERY / REMOTE ACTUATOR TEMPLE**
+**B — BATTERY / REMOTE ENDPOINT**
 
 - 1S LiPo；
-- Battery connector / NTC；
-- DRV2605L B + LRA B；
+- Battery connector；
 - Bone B；
-- CH1 downstream pull-up / local decoupling；
-- TP_GND_B / TP_3V3_B；
-- Inter-temple connector B。
+- LRA B；
+- J_INTER_B 8Pin；
+- 可选 BAT/GND TP。
 
-核心理由：
+B 板不再放 DRV2605L、PCA9540B、3V3 logic、I2C pull-up 或 Trigger logic。
 
-1. Battery 与主逻辑分居两侧，改善单边重量；
-2. Camera DVP、I²S、USB、RF 不跨镜腿；
-3. 只让低速 Haptic 控制、主电源和远端 Bone 差分输出跨 FPC；
-4. A/B 只是工程分区，不提前绑定左/右镜腿。
+**中央 8Pin FPC 逻辑 Pin Map：**
 
-Inter-temple FPC 当前采用 **12 conductor baseline**，包括并联 BAT+/GND、SYS_3V3、HAPTIC_B SDA/SCL/TRIG、SPK_P/N、可选 BAT_NTC 和 Spare。最终 FPC 型号、Pitch、Pin Order、铜宽、弯折寿命在机械/PCB阶段冻结。
+1. BAT+
+2. BAT+
+3. GND
+4. GND
+5. SPK_P
+6. SPK_N
+7. LRA_B_P
+8. LRA_B_N
 
-状态：`ARCHITECTURE_BASELINE / MECHANICAL_VALIDATION_PENDING`。
+其中 BAT+ 两 Pin 并联、GND 两 Pin 并联用于提高载流和降低压降；SPK_P/N 为 MAX98357A 到远端 Bone B 的差分 Class-D 输出；LRA_B_P/N 为 A 板 DRV2605L-B 到远端 LRA B 的差分驱动。
+
+当前明确不跨中央 FPC：
+
+- SYS_3V3；
+- HAPTIC_B SDA/SCL/TRIG；
+- BAT_NTC；
+- USB D+/D-；
+- I2S；
+- Camera DVP；
+- RF。
+
+BQ24074 与磁吸 USB/Charge 接口固定在 A。磁吸接口逻辑为 5V/GND/USB D+/D-，具体器件/尺寸/Footprint 继续 `TBD`。
+
+V1 8Pin 基线不传 Battery NTC；BQ24074 TS 若不使用电池包 NTC，必须按器件数据手册在 A 板合法本地偏置，不得悬空。
+
+风险门禁：
+
+1. 选择具体 FPC/连接器后核算 BAT+/GND 双 Pin 的额定电流、压降、接触电阻和温升；
+2. 验证 DRV2605L-B 经 FPC 远端驱动 LRA-B 时的 Auto Calibration、Back-EMF/谐振跟踪、振动强度和连续运行；
+3. 验证 SPK_P/N 跨 FPC 的 EMI / 串扰；
+4. A/B 当前仍是工程名，不冻结实际左/右镜腿。
+
+状态：`ARCHITECTURE_FROZEN / FPC_MECHANICAL_PENDING / MAGNETIC_FOOTPRINT_PENDING`。
 
 详细文件：
 
-- `dual-temple-partition.md`
-- `temple-partition.csv`
-- `inter-temple-fpc.csv`
+- `reviews/20260827-8pin-two-temple-architecture-freeze.md`
+- `common/dual-temple-partition.md`
+- `common/temple-partition.csv`
+- `common/inter-temple-fpc.csv`
 
 ## 规则
 
