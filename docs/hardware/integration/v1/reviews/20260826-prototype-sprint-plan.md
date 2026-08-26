@@ -3,6 +3,8 @@
 日期：2026-08-26
 状态：`CURRENT EXECUTION PLAN`
 
+> 2026-08-27 架构更新：中央互连已冻结为 8Pin，BQ24074 与磁吸 USB/Charge 位于 A，DRV2605L-B 也位于 A，B-COMMON 改为被动 Battery/Endpoint Board。详细见 `20260827-8pin-two-temple-architecture-freeze.md`。
+
 ## 1. 本阶段目标
 
 当前目标不是继续开放式优化，而是在尽可能短的时间内完成一套具有完整外形、完整双板结构、可烧录程序和可验证核心功能的实验型眼镜原型。
@@ -31,24 +33,42 @@
 ```text
 A-ESP       = ESP32-S3 主控版本 A 板
 A-BK        = BK7258 主控版本 A 板
-B-COMMON    = 两套主控尽量共用的 B 板
+B-COMMON    = 两套主控共用的被动 B 端点板
 ```
 
-A板承担主控、高速感知/接口和本侧执行；B板承担电池/远端执行，并尽量把与主控无关的功能做成公共板。
+A板承担主控、高速感知/接口、充电/电源和两颗 Haptic Driver；B板承担电池与远端 Bone/LRA 端点。
 
-### 架构冻结前必须明确的P0项目
+### 已冻结的架构项
 
-- A/B功能边界；
-- BQ24074 + Charger/PowerPath 最终属于 A 还是 B；
-- 12Pin FPC最终Pin Map；
-- A-ESP / A-BK / B-COMMON的板框最大尺寸；
-- Camera、FPC、磁吸接口、天线等强制机械位置；
+- A/B功能边界：已冻结；
+- BQ24074 + Charger/PowerPath：A；
+- Magnetic USB/Charge 逻辑位置：A；具体器件尺寸/Footprint仍 TBD；
+- PCA9540B：A；
+- DRV2605L A/B：两颗均在 A；
+- MAX98357A：A；
+- 8Pin FPC：已冻结；
+- B-COMMON：无主动IC、无SYS_3V3、无I2C/Trigger。
+
+### 当前 8Pin FPC
+
+```text
+Pin1  BAT+
+Pin2  BAT+
+Pin3  GND
+Pin4  GND
+Pin5  SPK_P
+Pin6  SPK_N
+Pin7  LRA_B_P
+Pin8  LRA_B_N
+```
+
+仍需在PCB前完成：
+
+- A-ESP / A-BK / B-COMMON板框最大尺寸；
+- Camera、FPC、磁吸接口、天线等关键机械位置；
 - Bone/LRA连接器真实 electrical pin 与 mechanical pad 对应关系；
-- C29/C30说明纠正；
-- C32是否保留；
-- 所有R/C/L/TP的Owner Core与Board归属。
-
-上述项目冻结后不再在本轮PCB冲刺中反复重分配。
+- 8Pin FPC/连接器具体型号、Pitch、铜宽和额定电流；
+- 所有R/C/L/TP的Footprint与Owner Core核对。
 
 ---
 
@@ -61,30 +81,29 @@ A板承担主控、高速感知/接口和本侧执行；B板承担电池/远端�
 - 两个PCB设计单元必须真正分开；
 - A侧跨板网络终止于 `J_INTER_A`；
 - B侧跨板网络从 `J_INTER_B` 开始；
-- A/B之间仅通过12Pin FPC/Harness Pin Map对应，不通过同一板级Wire或全局Net把两块PCB重新合成一个NetGraph；
+- A/B之间仅通过 8Pin FPC/Harness Pin Map对应，不通过同一板级Wire或全局Net把两块PCB重新合成一个NetGraph；
 - 外围器件按 `Core IC + Local Support Group` 绘制和布局；
 - Connector的electrical pin、mechanical pad、shield/mounting pad必须逐项确认；
 - MAX98357A BTL `SPK+ / SPK-` 均不得接GND；
-- 两颗DRV2605L固定地址0x5A，继续按当前冻结的地址隔离方案实现，除非新的人工决策明确替代；
+- 两颗DRV2605L固定地址0x5A，由PCA9540B在A板本地隔离；
+- DRV2605L-B 的 OUT+/OUT- 通过FPC直接连接远端 LRA B；
 - PCB前必须检查Footprint、Pad Number、Pin Mapping、Board Ownership和FPC Pin Mapping。
 
 ---
 
 ## 4. 2.5天PCB冲刺
 
-### 8月26日晚上 — Sprint 0.5 Day
+### 8月26日晚上—8月27日凌晨：Architecture Freeze
 
-目标：冻结架构并进入正式绘制。
+已完成/冻结：
 
-完成：
-
-1. 冻结A/B功能边界；
-2. 冻结A-ESP / A-BK / B-COMMON三板定义；
-3. 冻结BQ24074位置；
-4. 冻结12Pin FPC；
-5. 确认主要连接器Pin/Pad角色；
-6. 确定PCB最大尺寸与关键机械位置；
-7. 开始B-COMMON与公共电源/接口原理图。
+1. A/B功能边界；
+2. A-ESP / A-BK / B-COMMON三板定义；
+3. BQ24074 在 A；
+4. Magnetic USB/Charge 在 A（机械器件仍TBD）；
+5. 8Pin FPC与逻辑Pin Map；
+6. DRV2605L-B 从B移到A；
+7. B板被动化。
 
 输出：`ARCHITECTURE_FROZEN`。
 
@@ -96,30 +115,33 @@ A-ESP：
 
 - ESP32-S3最小系统；
 - Power / USB / EN / BOOT / UART；
+- BQ24074 + TPS63021；
 - OV5640；
 - Camera Rails；
 - ICS-43434；
 - BMI270；
 - MAX98357A；
-- PCA9540B / DRV2605L A；
-- J_INTER_A。
+- PCA9540B；
+- DRV2605L A；
+- DRV2605L B；
+- J_INTER_A 8Pin。
 
 A-BK：
 
 - BK7258最小系统；
 - Power / Reset / Boot / Download / RF；
+- BQ24074 + TPS63021；
 - 按BK Pin Matrix接入相同公共外围；
-- J_INTER_A。
+- PCA9540B + 双DRV2605L；
+- J_INTER_A 8Pin。
 
 B-COMMON：
 
-- Battery；
-- Charger/PowerPath（若冻结到B）；
-- DRV2605L B；
-- Bone B；
-- LRA B；
-- J_INTER_B；
-- 本地去耦/上拉/TP。
+- Battery connector；
+- Bone B endpoint；
+- LRA B endpoint；
+- J_INTER_B 8Pin；
+- 可选 TP_BAT_B / TP_GND_B。
 
 输出：三份原理图均具备PCB转换条件。
 
@@ -134,9 +156,11 @@ B-COMMON：
 3. A-ESP Placement / Routing；
 4. A-BK Placement / Routing；
 5. DRC/ERC/Footprint/Connector/FPC检查；
-6. 生产文件检查；
-7. BOM/CPL与缺料检查；
-8. PCB和需要补充的元器件下单。
+6. 8Pin BAT+/GND载流与压降检查；
+7. 远端 LRA_B_P/N 路径检查；
+8. 生产文件检查；
+9. BOM/CPL与缺料检查；
+10. PCB和需要补充的元器件下单。
 
 本阶段第一硬里程碑：
 
@@ -164,8 +188,8 @@ M1 = PCB_ORDERED
 - Camera；
 - Bone ×2；
 - LRA ×2；
-- FPC路径；
-- 磁吸接口；
+- 8Pin FPC路径；
+- 磁吸接口预留（实际器件未定）；
 - 天线Keepout；
 - PPG预留位置；
 - 前框；
@@ -282,9 +306,10 @@ Day 1完成标准：
 - Audio / Bone；
 - Haptic A/B；
 - PCA9540B / 双DRV；
-- FPC；
-- 双板供电；
-- 远端执行；
+- 8Pin FPC；
+- BAT+/GND 双Pin供电；
+- 远端 LRA 经FPC Auto Calibration / Back-EMF / 振动强度；
+- 远端 Bone；
 - 基础结构装配。
 
 目标：
@@ -303,13 +328,13 @@ Day 1完成标准：
 
 | Milestone | 目标日期 | 完成定义 |
 |---|---|---|
-| M0 Architecture Freeze | 8/26 晚 | 三板边界、FPC、连接器、关键机械边界冻结 |
+| M0 Architecture Freeze | 已完成 | 8Pin双镜腿、A/B边界、BQ24074与磁吸接口位置冻结 |
 | M1 PCB Ordered | 8/28 晚 | A-ESP/A-BK/B-COMMON完成生产检查并下单 |
 | M2 Enclosure Ready | 9/1 | 第一版/修正版3D结构可用于板级试装 |
 | M3 PPG Experiment Ready | 9/1 | 传感器、位置、采集/算法/对照方案明确 |
 | M4 PCB Arrival Target | 9/2 | PCB与关键件到齐；未到则后续整体顺延1天 |
 | M5 Bring-up Day 1 | 9/2 | 焊接、上电、烧录、基础通讯 |
-| M6 Bring-up Day 2 | 9/3 | 关键外围、FPC、双板、装壳测试并形成后续实验计划 |
+| M6 Bring-up Day 2 | 9/3 | 关键外围、8Pin FPC、双板、装壳测试并形成后续实验计划 |
 
 ---
 
@@ -317,11 +342,12 @@ Day 1完成标准：
 
 为了保证原型速度，本轮在M6之前避免：
 
-- 再次大范围改变产品功能定义；
+- 再次大范围改变已冻结的8Pin A/B架构；
 - 同时维护两套完全不同的外围架构；
 - 让旧自动生成原理图直接驱动最终PCB；
 - 为视觉美观无限延长原理图时间；
 - 在Connector Pin/Pad角色不明确时下板；
+- 在具体FPC载流能力未核算时默认8Pin电源一定安全；
 - PPG未经台架验证就强制塞入主PCB；
 - 在PCB未到货前投入大量时间做依赖实板的完整软件联调；
 - 把ESP32-S3和BK7258变成两套完全独立的上层应用协议。
@@ -330,16 +356,19 @@ Day 1完成标准：
 
 ## 10. 与旧计划的关系
 
-`20260810-next-step-two-board-schematic-plan.md` 仍保留其双板边界、Ownership和Connector/Harness审查结论作为工程参考；但从2026-08-26开始，执行方式变为：
+`20260810-next-step-two-board-schematic-plan.md` 仍保留其双板边界、Ownership和Connector/Harness审查方法作为工程参考；但旧 12Pin / B侧DRV2605L 分区已被 2026-08-27 的 8Pin Freeze 替代。
+
+当前执行方式：
 
 ```text
 人工重画/人工PCB
 + 双主控并行
-+ 三板目标
++ A-ESP / A-BK / 被动B-COMMON
++ 8Pin中央FPC
 + 2.5天PCB冲刺
 + 4~5天3D/PPG等待期
 + 9/2目标到货
 + 2天板级测试
 ```
 
-如果旧文件中的“继续由Skill增量修改现有 `.eprj2`”与本计划冲突，以本文件的当前人工原型冲刺策略为准。Skill后续继续作为方法论/自动化能力改进项目，不阻塞当前产品原型。
+如果旧文件与 `common/decision-log.md` D-015 或 `20260827-8pin-two-temple-architecture-freeze.md` 冲突，以后两者为准。
