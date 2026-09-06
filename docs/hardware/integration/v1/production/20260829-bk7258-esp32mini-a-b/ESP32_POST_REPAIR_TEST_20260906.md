@@ -84,6 +84,36 @@
 
 如果下载失败，优先检查：3V3、EN、BOOT、USB D+/D- 连通性、22Ω 串阻、USBLC6，而不是直接怀疑 ESP 模组损坏。
 
+## 2026-09-06 实测进展
+
+已使用 Windows + esptool v5.2.0，通过原生 USB 在 `COM8` 成功连接 ESP32-S3，并执行：
+
+```powershell
+python -m esptool --chip esp32s3 chip-id
+```
+
+esptool 实测返回：
+
+```text
+Chip type: ESP32-S3 (QFN56) (revision v0.2)
+Embedded Flash 4MB (XMC)
+Embedded PSRAM 2MB (AP_3v3)
+Crystal frequency: 40MHz
+USB mode: USB-Serial/JTAG
+Stub flasher running.
+```
+
+这一步确认：
+
+- ESP32-S3 本体可进入 ROM 下载模式；
+- EN / BOOT 操作有效；
+- 原生 USB 枚举与下载链路工作；
+- D+ / D-、22Ω 串联电阻、ESD 链路至少在当前测试下可工作；
+- 当前模组实际内存配置与 `ESP32-S3-MINI-1U-N4R2` 的 4MB Flash + 2MB PSRAM 相符；
+- `ESP32-S3 has no chip ID. Reading MAC address instead.` 为 esptool 的正常提示，不是故障。
+
+下一步：执行 `flash-id`，随后烧录最小测试固件。当前不执行 `erase-flash`。
+
 ## Step 6：外设逐个恢复
 
 ESP 最小系统通过后按顺序：
@@ -106,8 +136,14 @@ ESP 最小系统通过后按顺序：
 
 - 3.3V 硬短：REPAIRED
 - 已知根因：ESP 核心模组底部多焊盘连锡
-- 修复后静态阻值：PENDING
-- 限流上电：PENDING
-- 3.3V 电压：PENDING
-- ESP 下载：PENDING
+- 3.3V 上电实测：约 3.4V，稳定
+- EN 上电实测：约 3.4V，稳定
+- BOOT/EN 下载模式：PASS
+- ESP ROM：PASS
+- USB 枚举/下载链路：PASS
+- esptool chip-id：PASS
+- 模组识别：ESP32-S3 QFN56 rev v0.2
+- Flash：4MB，已由 esptool 识别；待 `flash-id` 进一步确认
+- PSRAM：2MB，已由 esptool 识别
+- ESP 最小系统：初步 PASS，待最小固件烧录
 - 外设：NOT TESTED
