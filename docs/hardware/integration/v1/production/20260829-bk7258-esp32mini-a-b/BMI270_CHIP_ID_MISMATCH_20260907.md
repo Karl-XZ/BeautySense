@@ -53,46 +53,74 @@ CHIP_ID = 0x27
 
 因此项目 BMI270 身份当前仍为 FAIL / unresolved，不得标 PASS。
 
-## 焊接状态判定
+## I2C 焊接压力测试实测
 
-当前 I2C 结果可以较强地说明以下路径至少具备稳定电气连接：
+测试程序：
+
+`ESP32_BMI_I2C_SOLDER_STRESS_20260907.ino`
+
+条件：PCA9540B 两个下游通道关闭，直接测试上游 0x68。
+
+100 kHz：
 
 ```text
-BMI 供电 / GND（至少足以启动和稳定响应 I2C）
-SDA
-SCL
-地址选择状态（当前地址稳定为 0x68）
+OK      = 1000
+FAIL    = 0
+0x24    = 0
+0x27    = 1000
+OTHER   = 0
 ```
 
-原因：PCA OFF / CH0 / CH1 三种状态下，对 0x68 连续读取均 10/10 返回同一字节 0x27，且无 READ FAIL。
+400 kHz：
 
-因此当前不符合“典型严重 SDA/SCL 虚焊导致间歇 ACK、随机字节或频繁读失败”的表现。
+```text
+OK      = 1000
+FAIL    = 0
+0x24    = 0
+0x27    = 1000
+OTHER   = 0
+```
 
-但是当前测试不能证明 BMI270 LGA-14 的所有底部焊点均合格，尤其以下功能尚未覆盖：
+共 2000 次原始 CHIP_ID 读取全部成功，全部稳定返回 0x27，无随机字节、无读失败。
+
+## 焊接状态判定
+
+当前结果可以较强地说明以下活动路径具备稳定电气连接：
+
+```text
+BMI 供电 / GND（至少足以启动和持续稳定响应 I2C）
+SDA
+SCL
+地址选择状态（当前稳定为 0x68）
+```
+
+100 kHz 与 400 kHz 共 2000 次无失败，使“严重或间歇性 SDA/SCL 虚焊导致 0x27”的可能性很低。
+
+但是当前测试不能证明 BMI LGA-14 的所有底部焊点均完整合格，仍未覆盖：
 
 ```text
 INT1 / INT2
-未使用接口脚
-所有底部焊盘的机械可靠性
-温度/弯曲/振动条件下的间歇虚焊
+未使用数字脚
+所有底部焊盘的长期机械可靠性
+温度 / 弯曲 / 振动条件下的间歇故障
 ```
 
-当前生产状态应记录为：
+当前生产状态：
 
 ```text
-BMI I2C basic solder connectivity: PASS / BASIC
+BMI I2C active solder connectivity: PASS / STRONG
 BMI complete LGA solder qualification: NOT FULLY VERIFIED
 BMI270 identity: FAIL / unresolved (0x27 != 0x24)
 ```
 
 ## 后续处理
 
-1. 暂停 7Semi BMI270 完整初始化结论，不因 `imu.begin()` 失败直接判定焊坏。
-2. 100kHz / 400kHz 分别进行长时间 CHIP_ID 连续读取，统计 ACK/READ FAIL。
-3. 测试期间轻压 PCB、轻微弯曲边缘，观察 0x68 是否掉线或读值改变。
-4. 有条件时用逻辑分析仪/示波器确认 SDA/SCL 上升沿、ACK、重复启动和高电平幅值。
-5. 检查板上实装 IMU 顶标、Pin1 方向与同批未焊器件。
-6. 身份问题解决后再做 Accel/Gyro/Temperature 连续数据测试；若项目使用 INT1/INT2，再独立验证中断脚。
+1. 当前不因 0x27 重新回流/吹焊 IMU。
+2. 断电重上电后可再重复一次 100 kHz / 400 kHz 压力测试作为冷启动复核。
+3. 测量并记录 IMU VDD、VDDIO 对 GND 实际电压。
+4. 继续在原始 I2C 层读取更多身份/状态寄存器。
+5. 若仍稳定为 0x27，临时尝试 BMI260 驱动完整初始化和 Accel/Gyro 数据读取，验证当前 silicon 行为。
+6. 若 BMI260 驱动正常，则按来料/实装身份异常处理；项目正式 BOM 仍保持 BMI270，不能据此判 BMI270 PASS。
 
 ## BOM 目标
 
