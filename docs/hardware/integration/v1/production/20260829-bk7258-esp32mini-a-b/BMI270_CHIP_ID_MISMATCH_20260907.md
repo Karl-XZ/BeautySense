@@ -1,76 +1,103 @@
 # ESP32-S3 首板 BMI270 身份异常记录（2026-09-07）
 
-## 实测
-
-SENSOR_I2C：
+## 实板映射
 
 ```text
-SDA = GPIO21
-SCL = GPIO18
+SENSOR_I2C_SDA = GPIO21
+SENSOR_I2C_SCL = GPIO18
+PCA9540B = 0x70
 ```
 
-I2C 扫描：
+两颗 DRV2605L 当前因返修检查发现连锡而已拆除，因此 PCA9540B 两个下游分支当前均无 0x5A 器件。
+
+## 身份与 mux 隔离实测
+
+分别测试 PCA9540B：
+
+```text
+OFF = 0x00
+CH0 = 0x04
+CH1 = 0x05
+```
+
+三个状态结果完全一致：
 
 ```text
 0x68 ACK
 0x70 ACK
+0x69 NO ACK
+0x5A not detected
+0x68 register 0x00 -> 0x27, 10/10, no read failure
 ```
 
-0x70 为 PCA9540B。
-
-对 0x68 的寄存器 `0x00` 直接读取：
+因此：
 
 ```text
-Raw CHIP_ID = 0x27
+0x68 位于 PCA9540B 上游主总线
+PCA CH0/CH1 与 0x27 无关
+DRV2605L 当前拆除状态符合扫描结果
 ```
 
-预期 BMI270：
+预期项目器件 BMI270：
 
 ```text
-CHIP_ID = 0x24
+CHIP_ID register = 0x00
+expected CHIP_ID = 0x24
 ```
 
-## 关键判断
-
-`0x27` 不是 BMI270 的合法 CHIP_ID；公开 Linux BMI270/BMI260 驱动明确区分：
+当前实测：
 
 ```text
-BMI260 CHIP_ID = 0x27
-BMI270 CHIP_ID = 0x24
+CHIP_ID = 0x27
 ```
 
-因此当前 0x68 器件表现与 BMI260 高度一致，而不是 BMI270。
+因此项目 BMI270 身份当前仍为 FAIL / unresolved，不得标 PASS。
 
-这也解释了为何 7Semi BMI270 库 `imu.begin()` 失败：BMI260 与 BMI270 使用不同的初始化配置数据，不能把 BMI270 的初始化数据直接发送给 BMI260。
+## 焊接状态判定
 
-## 当前状态
+当前 I2C 结果可以较强地说明以下路径至少具备稳定电气连接：
 
 ```text
-ESP32 SENSOR_I2C        PASS
-PCA9540B 0x70           PASS
-0x68 ACK                 PASS
-BMI270 身份              FAIL
-实测身份                 SUSPECT BMI260
-7Semi BMI270 init        FAIL（符合身份不匹配现象）
+BMI 供电 / GND（至少足以启动和稳定响应 I2C）
+SDA
+SCL
+地址选择状态（当前地址稳定为 0x68）
 ```
 
-## 处理原则
+原因：PCA OFF / CH0 / CH1 三种状态下，对 0x68 连续读取均 10/10 返回同一字节 0x27，且无 READ FAIL。
 
-1. 暂停把该器件标记为 BMI270 PASS。
-2. 不因 `imu.begin()` 失败立即返修 I2C 线路；基础总线已经工作。
-3. 用原始 Wire 连续读取 `0x00` 多次，并分别在 100kHz/400kHz 下验证结果是否稳定为 `0x27`。
-4. 检查实物顶标、采购来源、包装标签和入库记录。
-5. 项目 BOM 目标仍保持 BMI270；若确认安装件实际为 BMI260，则属于来料/装配型号不一致，应更换正确 BMI270。
-6. 若仅为临时板级 Bring-up，可另用 BMI260 驱动验证六轴，但不得据此将 BMI270 项目项判 PASS。
+因此当前不符合“典型严重 SDA/SCL 虚焊导致间歇 ACK、随机字节或频繁读失败”的表现。
 
-## BOM 参考
+但是当前测试不能证明 BMI270 LGA-14 的所有底部焊点均合格，尤其以下功能尚未覆盖：
 
-当前项目 BOM 目标：
+```text
+INT1 / INT2
+未使用接口脚
+所有底部焊盘的机械可靠性
+温度/弯曲/振动条件下的间歇虚焊
+```
+
+当前生产状态应记录为：
+
+```text
+BMI I2C basic solder connectivity: PASS / BASIC
+BMI complete LGA solder qualification: NOT FULLY VERIFIED
+BMI270 identity: FAIL / unresolved (0x27 != 0x24)
+```
+
+## 后续处理
+
+1. 暂停 7Semi BMI270 完整初始化结论，不因 `imu.begin()` 失败直接判定焊坏。
+2. 100kHz / 400kHz 分别进行长时间 CHIP_ID 连续读取，统计 ACK/READ FAIL。
+3. 测试期间轻压 PCB、轻微弯曲边缘，观察 0x68 是否掉线或读值改变。
+4. 有条件时用逻辑分析仪/示波器确认 SDA/SCL 上升沿、ACK、重复启动和高电平幅值。
+5. 检查板上实装 IMU 顶标、Pin1 方向与同批未焊器件。
+6. 身份问题解决后再做 Accel/Gyro/Temperature 连续数据测试；若项目使用 INT1/INT2，再独立验证中断脚。
+
+## BOM 目标
 
 ```text
 Bosch BMI270
 LCSC/JLCPCB: C2836813
 LGA-14 2.5x3 mm
 ```
-
-公开 LCSC/JLCPCB 条目将 C2836813 标为 BMI270，因此若安装件来自该料号但稳定读取 0x27，需要进一步追踪实物料号与装配来源。
