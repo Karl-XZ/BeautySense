@@ -79,14 +79,19 @@
 2. 尝试进入下载模式；
 3. PC/下载工具识别 ESP；
 4. 读取芯片信息；
-5. 烧录最简单串口输出或 GPIO 翻转程序；
-6. 暂时不要启用 Wi-Fi、Camera、音频或触觉。
+5. 读取 Flash ID；
+6. 烧录最简单串口输出或 GPIO 翻转程序；
+7. 暂时不要启用 Wi-Fi、Camera、音频或触觉。
 
 如果下载失败，优先检查：3V3、EN、BOOT、USB D+/D- 连通性、22Ω 串阻、USBLC6，而不是直接怀疑 ESP 模组损坏。
 
 ## 2026-09-06 实测进展
 
-已使用 Windows + esptool v5.2.0，通过原生 USB 在 `COM8` 成功连接 ESP32-S3，并执行：
+已使用 Windows + esptool v5.2.0，通过原生 USB 在 `COM8` 成功连接 ESP32-S3。
+
+### chip-id
+
+执行：
 
 ```powershell
 python -m esptool --chip esp32s3 chip-id
@@ -112,7 +117,27 @@ Stub flasher running.
 - 当前模组实际内存配置与 `ESP32-S3-MINI-1U-N4R2` 的 4MB Flash + 2MB PSRAM 相符；
 - `ESP32-S3 has no chip ID. Reading MAC address instead.` 为 esptool 的正常提示，不是故障。
 
-下一步：执行 `flash-id`，随后烧录最小测试固件。当前不执行 `erase-flash`。
+### flash-id
+
+执行：
+
+```powershell
+python -m esptool --chip esp32s3 --port COM8 flash-id
+```
+
+实测返回：
+
+```text
+Manufacturer: 46
+Device: 4016
+Detected flash size: 4MB
+Flash type set in eFuse: quad (4 data lines)
+Flash voltage set by eFuse: 3.3V
+```
+
+判定：`flash-id` PASS。Flash 容量再次确认为 4MB，eFuse 配置为 Quad 数据线模式，Flash 电压配置为 3.3V。
+
+下一步：烧录最小测试固件。当前仍不执行 `erase-flash`。
 
 ## Step 6：外设逐个恢复
 
@@ -142,8 +167,9 @@ ESP 最小系统通过后按顺序：
 - ESP ROM：PASS
 - USB 枚举/下载链路：PASS
 - esptool chip-id：PASS
+- esptool flash-id：PASS
 - 模组识别：ESP32-S3 QFN56 rev v0.2
-- Flash：4MB，已由 esptool 识别；待 `flash-id` 进一步确认
+- Flash：4MB，Manufacturer 46 / Device 4016 / Quad / 3.3V
 - PSRAM：2MB，已由 esptool 识别
 - ESP 最小系统：初步 PASS，待最小固件烧录
 - 外设：NOT TESTED
