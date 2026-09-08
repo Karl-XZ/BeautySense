@@ -8,7 +8,6 @@
 const char* WIFI_SSID = "DIILAB";
 const char* WIFI_PASS = "CHANGE_ME_LOCAL_ONLY";
 
-// Camera pin matrix (production board)
 #define CAM_SDA    1
 #define CAM_SCL    2
 #define CAM_D0     4
@@ -84,18 +83,12 @@ static esp_err_t stream_handler(httpd_req_t* req) {
     size_t hlen = snprintf(part_buf, sizeof(part_buf), STREAM_PART, fb->len);
 
     res = httpd_resp_send_chunk(req, STREAM_BOUNDARY, strlen(STREAM_BOUNDARY));
-    if (res == ESP_OK) {
-      res = httpd_resp_send_chunk(req, part_buf, hlen);
-    }
-    if (res == ESP_OK) {
-      res = httpd_resp_send_chunk(req, (const char*)fb->buf, fb->len);
-    }
+    if (res == ESP_OK) res = httpd_resp_send_chunk(req, part_buf, hlen);
+    if (res == ESP_OK) res = httpd_resp_send_chunk(req, (const char*)fb->buf, fb->len);
 
     esp_camera_fb_return(fb);
 
-    if (res != ESP_OK) {
-      break;
-    }
+    if (res != ESP_OK) break;
   }
 
   return res;
@@ -111,19 +104,19 @@ void startCameraServer() {
     return;
   }
 
-  httpd_uri_t index_uri = {
-    .uri = "/",
-    .method = HTTP_GET,
-    .handler = index_handler,
-    .user_ctx = NULL
-  };
+  httpd_uri_t index_uri;
+  memset(&index_uri, 0, sizeof(index_uri));
+  index_uri.uri = "/";
+  index_uri.method = HTTP_GET;
+  index_uri.handler = index_handler;
+  index_uri.user_ctx = NULL;
 
-  httpd_uri_t stream_uri = {
-    .uri = "/stream",
-    .method = HTTP_GET,
-    .handler = stream_handler,
-    .user_ctx = NULL
-  };
+  httpd_uri_t stream_uri;
+  memset(&stream_uri, 0, sizeof(stream_uri));
+  stream_uri.uri = "/stream";
+  stream_uri.method = HTTP_GET;
+  stream_uri.handler = stream_handler;
+  stream_uri.user_ctx = NULL;
 
   httpd_register_uri_handler(camera_httpd, &index_uri);
   httpd_register_uri_handler(camera_httpd, &stream_uri);
@@ -158,13 +151,13 @@ bool initCamera() {
   config.pixel_format = PIXFORMAT_JPEG;
 
   if (psramFound()) {
-    config.frame_size = FRAMESIZE_VGA;      // 640x480
+    config.frame_size = FRAMESIZE_VGA;
     config.jpeg_quality = 12;
     config.fb_count = 2;
     config.fb_location = CAMERA_FB_IN_PSRAM;
     config.grab_mode = CAMERA_GRAB_LATEST;
   } else {
-    config.frame_size = FRAMESIZE_QVGA;     // 320x240 fallback
+    config.frame_size = FRAMESIZE_QVGA;
     config.jpeg_quality = 14;
     config.fb_count = 1;
     config.fb_location = CAMERA_FB_IN_DRAM;
@@ -180,7 +173,6 @@ bool initCamera() {
   sensor_t* s = esp_camera_sensor_get();
   if (s) {
     Serial.printf("Camera PID: 0x%04X\n", s->id.PID);
-    // First bring-up: keep conservative defaults.
     s->set_framesize(s, psramFound() ? FRAMESIZE_VGA : FRAMESIZE_QVGA);
   }
 
