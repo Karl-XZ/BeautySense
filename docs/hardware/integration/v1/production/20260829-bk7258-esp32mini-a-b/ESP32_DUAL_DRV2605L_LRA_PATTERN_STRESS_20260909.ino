@@ -6,22 +6,17 @@
 
 // 银龄智护 B1
 // ESP32-S3 + PCA9540B + dual DRV2605L + dual LRA
-// 通道完整性 + 随机模板组合 + 长时间压力测试
+// 通道完整性 + 12 种 ROM 模板随机组合 + 长时间压力测试
+// Arduino-ESP32 3.x compatible.
 //
-// 目标：
-// 1) PCA9540B CH0 / CH1 地址隔离与 I2C 完整性
-// 2) 两颗 DRV2605L 0x5A 稳定访问
-// 3) GPIO34 / GPIO35 外部触发链路
-// 4) 保守 RTP 梯度：0x08 -> 0x10 -> 0x18 -> 0x20 -> 0x30，每级 120 ms
-// 5) LRA Library 6，12 个基础模板，每轮随机选模板并随机打乱模板内部顺序
-// 6) CH0-only / CH1-only / A-B 交替 / 双路近同时 四种策略循环覆盖
-// 7) 默认 120 分钟长时间压力测试
-// 8) 任意 OC / OT / GO timeout / I2C 失败立即停机并播放 FAIL 提示音
+// 2026-09-09 compile fix:
+// 自定义音频函数不再命名为 tone()，避免与 Arduino.h 自带
+// tone(uint8_t, unsigned int, unsigned long) 发生重载歧义。
 //
-// IMPORTANT：
-// - 之前本板曾出现 OC_DETECT，因此本程序故意不使用 0x7F 长时间 RTP。
-// - 长压测也故意排除 effect 14/15/16（Strong Buzz / 750 ms / 1000 ms 100% Alert）。
-// - 这是一份“稳定性/通道压力”程序，不是“最大振幅极限”程序。
+// 安全原则：
+// - 历史上本板曾出现 OC_DETECT，因此不使用 0x7F 长 RTP 硬顶。
+// - 长压测不使用 effect 14/15/16 的持续强振模板。
+// - 任意 I2C / GO timeout / OC / OT -> 立即停双路并 FAIL。
 
 // ============================================================
 // USER SETTINGS
@@ -31,7 +26,7 @@ static const uint32_t STRESS_DURATION_MIN = 120; // 0 = endless
 static const bool VERBOSE_EFFECTS = false;
 
 // ============================================================
-// HAPTIC PINS / ADDRESSES
+// HAPTIC HARDWARE
 // ============================================================
 
 static const int SDA_PIN = 21;
@@ -46,29 +41,25 @@ static const uint8_t PCA_OFF = 0x00;
 static const uint8_t PCA_CH0 = 0x04;
 static const uint8_t PCA_CH1 = 0x05;
 
-// ============================================================
-// DRV2605L REGISTERS
-// ============================================================
-
-static const uint8_t REG_STATUS    = 0x00;
-static const uint8_t REG_MODE      = 0x01;
-static const uint8_t REG_RTP       = 0x02;
-static const uint8_t REG_LIBRARY   = 0x03;
-static const uint8_t REG_WAVESEQ1  = 0x04;
-static const uint8_t REG_GO        = 0x0C;
-static const uint8_t REG_FEEDBACK  = 0x1A;
-static const uint8_t REG_CONTROL3  = 0x1D;
+// DRV2605L registers
+static const uint8_t REG_STATUS   = 0x00;
+static const uint8_t REG_MODE     = 0x01;
+static const uint8_t REG_RTP      = 0x02;
+static const uint8_t REG_LIBRARY  = 0x03;
+static const uint8_t REG_WAVESEQ1 = 0x04;
+static const uint8_t REG_GO       = 0x0C;
+static const uint8_t REG_FEEDBACK = 0x1A;
+static const uint8_t REG_CONTROL3 = 0x1D;
 
 static const uint8_t MODE_INTTRIG = 0x00;
 static const uint8_t MODE_EXTEDGE = 0x01;
 static const uint8_t MODE_RTP     = 0x05;
 
-// STATUS bits used as hard safety gates in this test.
 static const uint8_t STATUS_OT = 0x02;
 static const uint8_t STATUS_OC = 0x01;
 
 // ============================================================
-// AUDIO CUE: MAX98357A
+// AUDIO CUE / MAX98357A
 // ============================================================
 
 static const int AUDIO_BCLK = 36;
@@ -78,6 +69,7 @@ static const int AUDIO_SD   = 40;
 
 static const uint32_t AUDIO_SR = 22050;
 static const float AUDIO_LEVEL = 0.05f;
+
 static i2s_chan_handle_t audioTx = NULL;
 static bool audioCueReady = false;
 
@@ -105,52 +97,36 @@ static bool milestone60 = false;
 static bool milestone120 = false;
 
 // ============================================================
-// EFFECT TEMPLATES
+// 12 ROM PATTERN TEMPLATES
 // ============================================================
 
-// DRV2605L effect IDs used here (TouchSense 2200 table):
-// 1 Strong Click 100%
-// 2 Strong Click 60%
-// 3 Strong Click 30%
-// 4 Sharp Click 100%
-// 5 Sharp Click 60%
-// 6 Sharp Click 30%
-// 7 Soft Bump 100%
-// 8 Soft Bump 60%
-// 9 Soft Bump 30%
-// 10 Double Click 100%
-// 11 Double Click 60%
-// 12 Triple Click 100%
-// 13 Soft Fuzz 60%
-//
-// 12 个基础模板；运行时会随机选择模板，并随机 shuffle 内部顺序。
-// 所以实际序列远多于 12 种。
-
-struct Pattern {
+// Library 6 / LRA. 这里使用 effect 1..13 做组合，避开 14/15/16 长强振。
+struct Pattern
+{
   const char *name;
   uint8_t len;
   uint8_t e[8];
 };
 
 static const Pattern patterns[] = {
-  {"T01_SINGLE_STRONG60",    1, {2,0,0,0,0,0,0,0}},
-  {"T02_CLICK_3LEVEL",       3, {1,2,3,0,0,0,0,0}},
-  {"T03_SHARP_3LEVEL",       3, {4,5,6,0,0,0,0,0}},
-  {"T04_BUMP_3LEVEL",        3, {7,8,9,0,0,0,0,0}},
-  {"T05_DOUBLE_PAIR",        2, {10,11,0,0,0,0,0,0}},
-  {"T06_TRIPLE_SOFT",        2, {12,13,0,0,0,0,0,0}},
-  {"T07_SOFT_MIX",           4, {3,6,9,13,0,0,0,0}},
-  {"T08_MEDIUM_MIX",         4, {2,5,8,11,0,0,0,0}},
-  {"T09_ALTERNATE_CLICK",    5, {2,8,2,8,11,0,0,0}},
-  {"T10_TICK_BUMP",          5, {5,9,5,9,13,0,0,0}},
-  {"T11_SHORT_COMPLEX",      6, {1,3,5,7,9,11,0,0}},
-  {"T12_FULL_SAFE_SET",      7, {2,3,5,6,8,9,13,0}},
+  {"T01_SINGLE_STRONG60", 1, {2,0,0,0,0,0,0,0}},
+  {"T02_CLICK_3LEVEL",    3, {1,2,3,0,0,0,0,0}},
+  {"T03_SHARP_3LEVEL",    3, {4,5,6,0,0,0,0,0}},
+  {"T04_BUMP_3LEVEL",     3, {7,8,9,0,0,0,0,0}},
+  {"T05_DOUBLE_PAIR",     2, {10,11,0,0,0,0,0,0}},
+  {"T06_TRIPLE_SOFT",     2, {12,13,0,0,0,0,0,0}},
+  {"T07_SOFT_MIX",        4, {3,6,9,13,0,0,0,0}},
+  {"T08_MEDIUM_MIX",      4, {2,5,8,11,0,0,0,0}},
+  {"T09_ALTERNATE_CLICK", 5, {2,8,2,8,11,0,0,0}},
+  {"T10_TICK_BUMP",       5, {5,9,5,9,13,0,0,0}},
+  {"T11_SHORT_COMPLEX",   6, {1,3,5,7,9,11,0,0}},
+  {"T12_FULL_SAFE_SET",   7, {2,3,5,6,8,9,13,0}},
 };
 
 static const uint8_t PATTERN_COUNT = sizeof(patterns) / sizeof(patterns[0]);
 
 // ============================================================
-// AUDIO HELPERS
+// AUDIO CUE HELPERS
 // ============================================================
 
 bool initAudioCue()
@@ -164,7 +140,10 @@ bool initAudioCue()
 
   i2s_std_config_t cfg = {
     .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(AUDIO_SR),
-    .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO),
+    .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(
+      I2S_DATA_BIT_WIDTH_16BIT,
+      I2S_SLOT_MODE_STEREO
+    ),
     .gpio_cfg = {
       .mclk = I2S_GPIO_UNUSED,
       .bclk = (gpio_num_t)AUDIO_BCLK,
@@ -184,7 +163,8 @@ bool initAudioCue()
   return true;
 }
 
-void tone(float hz, uint32_t ms)
+// 不要改名回 tone()：Arduino.h 已经定义了 tone()。
+void playCueTone(float hz, uint32_t ms)
 {
   if (!audioCueReady) return;
 
@@ -193,12 +173,13 @@ void tone(float hz, uint32_t ms)
   uint32_t total = (uint64_t)AUDIO_SR * ms / 1000;
   uint32_t done = 0;
   float phase = 0.0f;
-  float step = 2.0f * PI * hz / AUDIO_SR;
-  int16_t amp = (int16_t)(32767.0f * AUDIO_LEVEL);
+  const float step = 2.0f * PI * hz / AUDIO_SR;
+  const int16_t amp = (int16_t)(32767.0f * AUDIO_LEVEL);
 
   while (done < total)
   {
     uint32_t n = min((uint32_t)FRAMES, total - done);
+
     for (uint32_t i = 0; i < n; ++i)
     {
       int16_t s = (int16_t)(sinf(phase) * amp);
@@ -209,7 +190,20 @@ void tone(float hz, uint32_t ms)
     }
 
     size_t written = 0;
-    i2s_channel_write(audioTx, buf, n * 2 * sizeof(int16_t), &written, portMAX_DELAY);
+    esp_err_t err = i2s_channel_write(
+      audioTx,
+      buf,
+      n * 2 * sizeof(int16_t),
+      &written,
+      portMAX_DELAY
+    );
+
+    if (err != ESP_OK)
+    {
+      Serial.printf("AUDIO CUE WRITE FAIL: 0x%x\n", err);
+      return;
+    }
+
     done += n;
   }
 }
@@ -231,7 +225,13 @@ void audioGap(uint32_t ms)
   {
     uint32_t n = min((uint32_t)FRAMES, total - done);
     size_t written = 0;
-    i2s_channel_write(audioTx, zero, n * 2 * sizeof(int16_t), &written, portMAX_DELAY);
+    i2s_channel_write(
+      audioTx,
+      zero,
+      n * 2 * sizeof(int16_t),
+      &written,
+      portMAX_DELAY
+    );
     done += n;
   }
 }
@@ -239,24 +239,24 @@ void audioGap(uint32_t ms)
 void cueStart()
 {
   Serial.println("AUDIO CUE: START");
-  tone(660, 120); audioGap(50);
-  tone(880, 120); audioGap(50);
-  tone(1175, 180); audioGap(100);
+  playCueTone(660.0f, 120);  audioGap(50);
+  playCueTone(880.0f, 120);  audioGap(50);
+  playCueTone(1175.0f, 180); audioGap(100);
 }
 
 void cuePass()
 {
   Serial.println("AUDIO CUE: PASS");
-  tone(1047, 180); audioGap(60);
-  tone(1568, 300); audioGap(100);
+  playCueTone(1047.0f, 180); audioGap(60);
+  playCueTone(1568.0f, 300); audioGap(100);
 }
 
 void cueFail()
 {
   Serial.println("AUDIO CUE: FAIL");
-  tone(660, 160); audioGap(50);
-  tone(440, 180); audioGap(50);
-  tone(220, 350); audioGap(100);
+  playCueTone(660.0f, 160); audioGap(50);
+  playCueTone(440.0f, 180); audioGap(50);
+  playCueTone(220.0f, 350); audioGap(100);
 }
 
 // ============================================================
@@ -293,6 +293,7 @@ bool readReg(uint8_t reg, uint8_t &value)
 {
   Wire.beginTransmission(DRV_ADDR);
   Wire.write(reg);
+
   if (Wire.endTransmission(false) != 0)
   {
     i2cErrors++;
@@ -321,6 +322,7 @@ const char *channelName(uint8_t pca)
 void emergencyStopAll()
 {
   const uint8_t chans[2] = {PCA_CH0, PCA_CH1};
+
   for (uint8_t i = 0; i < 2; ++i)
   {
     if (pcaSelect(chans[i]))
@@ -330,29 +332,37 @@ void emergencyStopAll()
       writeReg(REG_MODE, 0x00);
     }
   }
+
   pcaSelect(PCA_OFF);
 }
 
 void failStop(const char *reason)
 {
   emergencyStopAll();
+
   Serial.println();
   Serial.println("================ HAPTIC STRESS FAIL ================");
   Serial.println(reason);
-  Serial.printf("round=%lu patterns=%lu ch0Effects=%lu ch1Effects=%lu\n",
-                (unsigned long)roundCount,
-                (unsigned long)patternCount,
-                (unsigned long)ch0Effects,
-                (unsigned long)ch1Effects);
-  Serial.printf("i2cErr=%lu goTimeout=%lu OC=%lu OT=%lu statusReads=%lu diagBitSeen=%lu\n",
-                (unsigned long)i2cErrors,
-                (unsigned long)goTimeouts,
-                (unsigned long)ocEvents,
-                (unsigned long)otEvents,
-                (unsigned long)statusReads,
-                (unsigned long)diagBitSeen);
+  Serial.printf(
+    "round=%lu patterns=%lu ch0Effects=%lu ch1Effects=%lu\n",
+    (unsigned long)roundCount,
+    (unsigned long)patternCount,
+    (unsigned long)ch0Effects,
+    (unsigned long)ch1Effects
+  );
+  Serial.printf(
+    "i2cErr=%lu goTimeout=%lu OC=%lu OT=%lu statusReads=%lu diagBitSeen=%lu\n",
+    (unsigned long)i2cErrors,
+    (unsigned long)goTimeouts,
+    (unsigned long)ocEvents,
+    (unsigned long)otEvents,
+    (unsigned long)statusReads,
+    (unsigned long)diagBitSeen
+  );
   Serial.println("=====================================================");
+
   cueFail();
+
   while (true) delay(1000);
 }
 
@@ -368,27 +378,31 @@ void checkStatusOrFail(uint8_t pca, const char *context)
 
   if (VERBOSE_EFFECTS)
   {
-    Serial.printf("STATUS %s %s = 0x%02X OC=%u OT=%u\n",
-                  channelName(pca), context, s,
-                  (unsigned)((s & STATUS_OC) != 0),
-                  (unsigned)((s & STATUS_OT) != 0));
+    Serial.printf(
+      "STATUS %s %s = 0x%02X OC=%u OT=%u\n",
+      channelName(pca),
+      context,
+      s,
+      (unsigned)((s & STATUS_OC) != 0),
+      (unsigned)((s & STATUS_OT) != 0)
+    );
   }
 
   if (s & STATUS_OC)
   {
     ocEvents++;
-    failStop("OC_DETECT asserted. Stop immediately and inspect OUT+/OUT-/LRA/connection.");
+    failStop("OC_DETECT asserted. Check OUT+/OUT-/LRA/connection.");
   }
 
   if (s & STATUS_OT)
   {
     otEvents++;
-    failStop("OVER_TEMP asserted. Stop immediately.");
+    failStop("OVER_TEMP asserted.");
   }
 }
 
 // ============================================================
-// DRV CONFIG
+// DRV CONFIGURATION
 // ============================================================
 
 bool configureSelectedLRACommon()
@@ -405,14 +419,15 @@ bool configureSelectedLRACommon()
   if (!readReg(REG_FEEDBACK, feedback)) return false;
   if (!readReg(REG_CONTROL3, control3)) return false;
 
-  feedback |= 0x80;                // N_ERM_LRA = 1 -> LRA
-  control3 &= (uint8_t)~0x20;      // ERM_OPEN_LOOP = 0
-  control3 &= (uint8_t)~0x08;      // RTP signed
-  control3 &= (uint8_t)~0x01;      // LRA open loop = 0 -> closed loop
+  feedback |= 0x80;           // N_ERM_LRA = 1
+  control3 &= (uint8_t)~0x20; // ERM_OPEN_LOOP = 0
+  control3 &= (uint8_t)~0x08; // signed RTP
+  control3 &= (uint8_t)~0x01; // LRA_OPEN_LOOP = 0
 
   if (!writeReg(REG_FEEDBACK, feedback)) return false;
   if (!writeReg(REG_CONTROL3, control3)) return false;
-  if (!writeReg(REG_LIBRARY, 0x06)) return false; // LRA library
+  if (!writeReg(REG_LIBRARY, 0x06)) return false;
+
   return true;
 }
 
@@ -425,6 +440,7 @@ bool configureSelectedEffect(uint8_t effect, uint8_t mode)
   if (!writeReg(REG_GO, 0x00)) return false;
 
   if (!writeReg(REG_WAVESEQ1, effect)) return false;
+
   for (uint8_t i = 1; i < 8; ++i)
   {
     if (!writeReg(REG_WAVESEQ1 + i, 0x00)) return false;
@@ -445,26 +461,46 @@ bool configureSelectedRTP()
 }
 
 // ============================================================
-// PLAYBACK
+// EFFECT PLAYBACK
 // ============================================================
 
 void startEffect(uint8_t pca, uint8_t effect)
 {
   if (!pcaSelect(pca)) failStop("PCA select failed before effect");
 
-  // Read once before playback to clear any old latched status.
-  uint8_t old = 0;
-  if (!readReg(REG_STATUS, old)) failStop("Pre-effect STATUS read failed");
+  // Read once to clear/check old latched status before a new drive.
+  uint8_t oldStatus = 0;
+  if (!readReg(REG_STATUS, oldStatus)) failStop("Pre-effect STATUS read failed");
   statusReads++;
 
-  if (!configureSelectedEffect(effect, MODE_INTTRIG)) failStop("DRV effect configuration failed");
+  if (oldStatus & STATUS_OC)
+  {
+    ocEvents++;
+    failStop("Latched OC found before effect start");
+  }
+
+  if (oldStatus & STATUS_OT)
+  {
+    otEvents++;
+    failStop("Latched OT found before effect start");
+  }
+
+  if (!configureSelectedEffect(effect, MODE_INTTRIG))
+    failStop("DRV effect configuration failed");
+
   if (!writeReg(REG_GO, 0x01)) failStop("GO=1 write failed");
 
   if (pca == PCA_CH0) ch0Effects++;
   else ch1Effects++;
 
   if (VERBOSE_EFFECTS)
-    Serial.printf("START %s effect=%u\n", channelName(pca), (unsigned)effect);
+  {
+    Serial.printf(
+      "START %s effect=%u\n",
+      channelName(pca),
+      (unsigned)effect
+    );
+  }
 }
 
 void waitEffectDone(uint8_t pca, uint32_t timeoutMs = 2200)
@@ -539,23 +575,42 @@ void playDualNearSimultaneous(uint8_t effectA, uint8_t effectB)
 }
 
 // ============================================================
-// STARTUP INTEGRITY: RTP RAMP
+// PHASE A: CONSERVATIVE RTP RAMP
 // ============================================================
 
 void conservativeRtpRamp(uint8_t pca)
 {
   static const uint8_t levels[] = {0x08, 0x10, 0x18, 0x20, 0x30};
+  static const size_t LEVEL_COUNT = sizeof(levels) / sizeof(levels[0]);
 
   Serial.printf("RTP SAFE RAMP: %s\n", channelName(pca));
 
   if (!pcaSelect(pca)) failStop("PCA select failed before RTP ramp");
   if (!configureSelectedRTP()) failStop("RTP config failed");
 
-  for (uint8_t i = 0; i < sizeof(levels); ++i)
+  for (size_t i = 0; i < LEVEL_COUNT; ++i)
   {
-    uint8_t old = 0;
-    if (!readReg(REG_STATUS, old)) failStop("Pre-RTP STATUS read failed");
+    uint8_t oldStatus = 0;
+    if (!readReg(REG_STATUS, oldStatus)) failStop("Pre-RTP STATUS read failed");
     statusReads++;
+
+    if (oldStatus & STATUS_OC)
+    {
+      ocEvents++;
+      failStop("Latched OC before RTP step");
+    }
+
+    if (oldStatus & STATUS_OT)
+    {
+      otEvents++;
+      failStop("Latched OT before RTP step");
+    }
+
+    Serial.printf(
+      "  %s RTP=0x%02X 120ms\n",
+      channelName(pca),
+      levels[i]
+    );
 
     if (!writeReg(REG_RTP, levels[i])) failStop("RTP write failed");
     delay(120);
@@ -567,12 +622,12 @@ void conservativeRtpRamp(uint8_t pca)
   }
 
   if (!pcaSelect(pca)) failStop("PCA select failed ending RTP ramp");
-  writeReg(REG_RTP, 0x00);
-  writeReg(REG_MODE, 0x00);
+  if (!writeReg(REG_RTP, 0x00)) failStop("RTP final stop failed");
+  if (!writeReg(REG_MODE, MODE_INTTRIG)) failStop("RTP final mode restore failed");
 }
 
 // ============================================================
-// STARTUP / PERIODIC EXTERNAL TRIGGER TEST
+// PHASE B / PERIODIC EXTERNAL TRIGGER TEST
 // ============================================================
 
 void pulseTrigger(int pin)
@@ -589,35 +644,39 @@ void externalTriggerSanity()
   Serial.println("EXTERNAL TRIGGER SANITY: GPIO34 + GPIO35");
 
   if (!pcaSelect(PCA_CH0)) failStop("CH0 select failed for external trigger");
-  if (!configureSelectedEffect(2, MODE_EXTEDGE)) failStop("CH0 external trigger config failed");
+  if (!configureSelectedEffect(2, MODE_EXTEDGE))
+    failStop("CH0 external trigger config failed");
 
   if (!pcaSelect(PCA_CH1)) failStop("CH1 select failed for external trigger");
-  if (!configureSelectedEffect(5, MODE_EXTEDGE)) failStop("CH1 external trigger config failed");
+  if (!configureSelectedEffect(5, MODE_EXTEDGE))
+    failStop("CH1 external trigger config failed");
 
-  pcaSelect(PCA_OFF);
+  // 两颗都已配置好，可断开 mux，再分别脉冲硬件触发脚。
+  if (!pcaSelect(PCA_OFF)) failStop("PCA OFF failed before external triggers");
 
   pulseTrigger(HAPTIC_L_TRIG);
   delay(350);
   checkStatusOrFail(PCA_CH0, "GPIO34-trigger");
 
-  pcaSelect(PCA_OFF);
+  if (!pcaSelect(PCA_OFF)) failStop("PCA OFF failed between external triggers");
+
   pulseTrigger(HAPTIC_R_TRIG);
   delay(350);
   checkStatusOrFail(PCA_CH1, "GPIO35-trigger");
 
-  pcaSelect(PCA_OFF);
+  if (!pcaSelect(PCA_OFF)) failStop("PCA OFF failed after external triggers");
   extTrigChecks++;
 }
 
 // ============================================================
-// RANDOMIZATION / PATTERN EXECUTION
+// RANDOM PATTERN EXECUTION
 // ============================================================
 
 void shuffleSequence(uint8_t *seq, uint8_t len)
 {
   if (len < 2) return;
 
-  for (int i = len - 1; i > 0; --i)
+  for (int i = (int)len - 1; i > 0; --i)
   {
     int j = random(0, i + 1);
     uint8_t t = seq[i];
@@ -635,20 +694,21 @@ void runPatternRound()
   for (uint8_t i = 0; i < p.len; ++i) seq[i] = p.e[i];
   shuffleSequence(seq, p.len);
 
-  // Balanced channel coverage:
   // 0 CH0 only
   // 1 CH1 only
   // 2 A/B alternating
-  // 3 dual near-simultaneous with cross-shifted sequence
+  // 3 dual near-simultaneous
   uint8_t strategy = roundCount % 4;
 
-  Serial.printf("ROUND %lu | pattern=%u/%u %s | variant=shuffle | strategy=%u | len=%u\n",
-                (unsigned long)(roundCount + 1),
-                (unsigned)(pidx + 1),
-                (unsigned)PATTERN_COUNT,
-                p.name,
-                (unsigned)strategy,
-                (unsigned)p.len);
+  Serial.printf(
+    "ROUND %lu | pattern=%u/%u %s | shuffle | strategy=%u | len=%u\n",
+    (unsigned long)(roundCount + 1),
+    (unsigned)(pidx + 1),
+    (unsigned)PATTERN_COUNT,
+    p.name,
+    (unsigned)strategy,
+    (unsigned)p.len
+  );
 
   if (strategy == 0)
   {
@@ -678,6 +738,7 @@ void runPatternRound()
   else
   {
     uint8_t shift = (p.len > 1) ? (uint8_t)random(1, p.len) : 0;
+
     for (uint8_t i = 0; i < p.len; ++i)
     {
       uint8_t eA = seq[i];
@@ -690,13 +751,12 @@ void runPatternRound()
   roundCount++;
   patternCount++;
 
-  // Periodically re-validate the GPIO trigger path during the long run.
   if ((roundCount % 100) == 0)
   {
     externalTriggerSanity();
   }
 
-  // Random cool-down / idle interval to avoid turning this into a thermal abuse test.
+  // 留随机 idle，目标是稳定性而不是纯热虐待。
   delay(random(500, 1300));
 }
 
@@ -709,28 +769,37 @@ void printHealth()
   uint32_t elapsedSec = (millis() - stressStartMs) / 1000;
 
   Serial.println("----- HAPTIC STRESS HEALTH -----");
-  Serial.printf("elapsed=%lus rounds=%lu patterns=%lu extTrigChecks=%lu\n",
-                (unsigned long)elapsedSec,
-                (unsigned long)roundCount,
-                (unsigned long)patternCount,
-                (unsigned long)extTrigChecks);
-  Serial.printf("ch0Effects=%lu ch1Effects=%lu i2cErr=%lu goTimeout=%lu OC=%lu OT=%lu\n",
-                (unsigned long)ch0Effects,
-                (unsigned long)ch1Effects,
-                (unsigned long)i2cErrors,
-                (unsigned long)goTimeouts,
-                (unsigned long)ocEvents,
-                (unsigned long)otEvents);
-  Serial.printf("statusReads=%lu diagBitSeen=%lu heap=%u\n",
-                (unsigned long)statusReads,
-                (unsigned long)diagBitSeen,
-                (unsigned)ESP.getFreeHeap());
+  Serial.printf(
+    "elapsed=%lus rounds=%lu patterns=%lu extTrigChecks=%lu\n",
+    (unsigned long)elapsedSec,
+    (unsigned long)roundCount,
+    (unsigned long)patternCount,
+    (unsigned long)extTrigChecks
+  );
+  Serial.printf(
+    "ch0Effects=%lu ch1Effects=%lu i2cErr=%lu goTimeout=%lu OC=%lu OT=%lu\n",
+    (unsigned long)ch0Effects,
+    (unsigned long)ch1Effects,
+    (unsigned long)i2cErrors,
+    (unsigned long)goTimeouts,
+    (unsigned long)ocEvents,
+    (unsigned long)otEvents
+  );
+  Serial.printf(
+    "statusReads=%lu diagBitSeen=%lu heap=%u\n",
+    (unsigned long)statusReads,
+    (unsigned long)diagBitSeen,
+    (unsigned)ESP.getFreeHeap()
+  );
 }
 
-void printMilestone(uint32_t min)
+void printMilestone(uint32_t minValue)
 {
   Serial.println();
-  Serial.printf("========== HAPTIC STRESS %lu-MIN MILESTONE ==========\n", (unsigned long)min);
+  Serial.printf(
+    "========== HAPTIC STRESS %lu-MIN MILESTONE ==========\n",
+    (unsigned long)minValue
+  );
   printHealth();
   Serial.println("PASS SO FAR: no hard-stop condition observed.");
   Serial.println("======================================================");
@@ -768,22 +837,26 @@ void updateMilestones()
 void finishPass()
 {
   emergencyStopAll();
+
   Serial.println();
   Serial.println("================ HAPTIC STRESS RESULT ================");
   Serial.println("DUAL DRV2605L / LRA CHANNEL STRESS: PASS CANDIDATE");
   printHealth();
-  Serial.println("Requirements observed by firmware:");
+  Serial.println("Firmware requirements:");
   Serial.println("  i2cErr=0, goTimeout=0, OC=0, OT=0");
-  Serial.println("  CH0 and CH1 effect counters both increased");
-  Serial.println("  GPIO34/GPIO35 external-trigger sanity checks executed");
-  Serial.println("Manual check still required: both LRAs physically felt normal and no abnormal heating/noise.");
+  Serial.println("  CH0/CH1 effect counters both increased");
+  Serial.println("  GPIO34/GPIO35 external-trigger sanity executed");
+  Serial.println("Manual requirement:");
+  Serial.println("  both LRAs physically normal; no dropouts, abnormal heat or noise");
   Serial.println("======================================================");
+
   cuePass();
+
   while (true) delay(1000);
 }
 
 // ============================================================
-// SETUP
+// SETUP / LOOP
 // ============================================================
 
 void setup()
@@ -794,10 +867,13 @@ void setup()
   Serial.println();
   Serial.println("============================================================");
   Serial.println("YINLING-ZHIHU B1 DUAL DRV2605L / LRA PATTERN STRESS TEST");
+  Serial.println("COMPILE FIX: custom audio function = playCueTone(), not tone()");
   Serial.println("PCA=0x70 DRV=0x5A | SDA=21 SCL=18 | TRIG=GPIO34/GPIO35");
-  Serial.printf("Base templates=%u | duration=%lu min\n",
-                (unsigned)PATTERN_COUNT,
-                (unsigned long)STRESS_DURATION_MIN);
+  Serial.printf(
+    "Base templates=%u | duration=%lu min\n",
+    (unsigned)PATTERN_COUNT,
+    (unsigned long)STRESS_DURATION_MIN
+  );
   Serial.println("Effect 14/15/16 and long 0x7F RTP are intentionally excluded.");
   Serial.println("============================================================");
 
@@ -807,7 +883,10 @@ void setup()
   digitalWrite(HAPTIC_R_TRIG, LOW);
 
   audioCueReady = initAudioCue();
-  Serial.printf("AUDIO CUE INIT: %s\n", audioCueReady ? "PASS" : "DISABLED/FAIL (haptic test continues)");
+  Serial.printf(
+    "AUDIO CUE INIT: %s\n",
+    audioCueReady ? "PASS" : "DISABLED/FAIL (haptic test continues)"
+  );
 
   Wire.begin(SDA_PIN, SCL_PIN);
   Wire.setClock(400000);
@@ -816,15 +895,15 @@ void setup()
   if (!ack(PCA_ADDR)) failStop("PCA9540B 0x70 NO ACK");
   Serial.println("PCA9540B 0x70: PASS");
 
-  pcaSelect(PCA_CH0);
+  if (!pcaSelect(PCA_CH0)) failStop("PCA CH0 select failed");
   if (!ack(DRV_ADDR)) failStop("CH0 DRV2605L 0x5A NO ACK");
   Serial.println("CH0 DRV2605L 0x5A: PASS");
 
-  pcaSelect(PCA_CH1);
+  if (!pcaSelect(PCA_CH1)) failStop("PCA CH1 select failed");
   if (!ack(DRV_ADDR)) failStop("CH1 DRV2605L 0x5A NO ACK");
   Serial.println("CH1 DRV2605L 0x5A: PASS");
 
-  // First clear and inspect old latched status on both branches.
+  // Initial latched status inspection.
   checkStatusOrFail(PCA_CH0, "initial-clean");
   checkStatusOrFail(PCA_CH1, "initial-clean");
 
@@ -837,12 +916,12 @@ void setup()
   Serial.println("========== PHASE B: EXTERNAL TRIGGER INTEGRITY ==========");
   externalTriggerSanity();
 
-  randomSeed(esp_random());
+  randomSeed((unsigned long)esp_random());
 
   Serial.println();
   Serial.println("========== PHASE C: RANDOM ROM PATTERN LONG STRESS ==========");
   Serial.println("Strategies: 0=CH0, 1=CH1, 2=alternate, 3=dual-near-simultaneous");
-  Serial.println("Every 100 rounds: repeat GPIO34/GPIO35 trigger sanity check.");
+  Serial.println("Every 100 rounds: GPIO34/GPIO35 trigger sanity check.");
   Serial.println("Any I2C / GO timeout / OC / OT -> immediate hard stop.");
 
   cueStart();
@@ -850,10 +929,6 @@ void setup()
   stressStartMs = millis();
   lastHealthMs = stressStartMs;
 }
-
-// ============================================================
-// LOOP
-// ============================================================
 
 void loop()
 {
@@ -870,16 +945,24 @@ void loop()
   if (STRESS_DURATION_MIN > 0)
   {
     uint32_t targetMs = STRESS_DURATION_MIN * 60000UL;
+
     if (millis() - stressStartMs >= targetMs)
     {
-      if (i2cErrors == 0 && goTimeouts == 0 && ocEvents == 0 && otEvents == 0 &&
-          ch0Effects > 0 && ch1Effects > 0 && extTrigChecks > 0)
+      if (
+        i2cErrors == 0 &&
+        goTimeouts == 0 &&
+        ocEvents == 0 &&
+        otEvents == 0 &&
+        ch0Effects > 0 &&
+        ch1Effects > 0 &&
+        extTrigChecks > 0
+      )
       {
         finishPass();
       }
       else
       {
-        failStop("Duration reached but one or more PASS requirements are not satisfied");
+        failStop("Duration reached but PASS requirements are not satisfied");
       }
     }
   }
