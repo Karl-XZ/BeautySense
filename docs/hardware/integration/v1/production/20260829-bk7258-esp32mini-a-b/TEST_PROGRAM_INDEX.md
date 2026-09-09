@@ -4,6 +4,7 @@
 
 ## 当前测试程序
 
+- [Haptic 压力测试｜双 DRV2605L + 双 LRA，12 模板随机组合，默认 120 min](./ESP32_DUAL_DRV2605L_LRA_PATTERN_STRESS_20260909.ino)
 - [BLE GATT｜手机发现/连接/读写/通知/重连](./ESP32_BLE_GATT_PHONE_TEST_20260909.ino)
 - [Test 5C OFFLINE V2｜20 次真实断电冷启动（无 Wi-Fi 环境，推荐）](./ESP32_TEST5C_OFFLINE_COLD_BOOT_20X_V2_20260909.ino)
 - [Test 5C OFFLINE V1｜旧版，仅保留追溯](./ESP32_TEST5C_OFFLINE_COLD_BOOT_20X_20260909.ino)
@@ -27,6 +28,7 @@
 - 无目标 AP/Wi-Fi 环境时，不应把 `WIFI INIT FAIL` 解释成板级冷启动失败；改用 Test 5C OFFLINE 验证其他硬件链路。
 - Test 5C OFFLINE V1 存在显示逻辑歧义：上传/复位后的非 POWERON 启动虽然不会写入 pass/fail 计数，但 15 秒后仍会打印 `THIS OFFLINE BOOT: PASS`，且之后持续输出日志。V2 已修正：非 POWERON 只打印 `PRECHECK ... NOT COUNTED`；只有 `RESET REASON: POWERON` 才能判冷启动 PASS/FAIL；15 秒判定后停止前台刷屏并等待下一次真实断电上电。
 - ESP32-S3 蓝牙验证按 BLE GATT 做，不把 Bluetooth Classic/A2DP 音频能力算入 ESP32-S3 测试范围。
+- Haptic 长压测因历史上曾出现 `OC_DETECT=1`，禁止把“长时间 0x7F RTP”作为默认压力方式。当前推荐程序使用保守 RTP 启动筛查 + Library 6 短效果随机组合；任意 OC/OT/GO timeout/I2C 失败立即停机。
 
 ## 测试程序声音提示约定（2026-09-09 起）
 
