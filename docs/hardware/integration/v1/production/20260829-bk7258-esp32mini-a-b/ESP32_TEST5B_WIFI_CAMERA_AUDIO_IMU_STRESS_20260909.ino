@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <Wire.h>
+#include <Preferences.h>
 #include <math.h>
 #include "esp_camera.h"
 #include "driver/i2s_std.h"
@@ -15,15 +16,22 @@
 // ESP32-S3: Wi-Fi + OV5640 + MIC RX + MAX98357A TX + BMI260-like IMU/PCA concurrency stress
 // Arduino-ESP32 3.x
 //
-// IMPORTANT:
-// - Current mounted IMU responds as BMI260-like: I2C 0x68, CHIP_ID=0x27.
-// - This sketch deliberately stops if CHIP_ID is not 0x27.
-// - PCA9540B stays with CH0/CH1 disconnected (0x00). Haptic is NOT included in Test 5B yet.
-// - Repository Wi-Fi password remains sanitized. Fill WIFI_PASS only in your local copy.
+// Wi-Fi behavior:
+// 1) First try credentials already saved by the ESP32 Wi-Fi stack from earlier tests.
+// 2) Then try this project's own NVS Preferences namespace.
+// 3) Only if both fail, ask once over Serial and save the successful credentials to NVS.
+// Normal sketch uploads do not require re-entering the password unless flash/NVS is erased.
+// The password is never printed to Serial and is not stored in this Git repository.
+//
+// Current mounted IMU responds as BMI260-like: I2C 0x68, CHIP_ID=0x27.
+// This sketch deliberately stops if CHIP_ID is not 0x27.
+// PCA9540B stays with CH0/CH1 disconnected (0x00). Haptic is NOT included in Test 5B yet.
 
-// ---------------- Wi-Fi ----------------
-static const char *WIFI_SSID = "DIILAB";
-static const char *WIFI_PASS = "CHANGE_ME_LOCAL_ONLY";
+// ---------------- Wi-Fi / NVS ----------------
+static const char *DEFAULT_WIFI_SSID = "DIILAB";
+static const char *WIFI_NVS_NAMESPACE = "yinling_wifi";
+static const char *WIFI_NVS_KEY_SSID = "ssid";
+static const char *WIFI_NVS_KEY_PASS = "pass";
 
 // ---------------- Camera ----------------
 static const int CAM_SIOD  = 1;
@@ -111,6 +119,121 @@ static uint32_t lastImuMs = 0;
 static uint32_t lastWifiState = WL_IDLE_STATUS;
 static uint32_t testStartMs = 0;
 static bool milestonePrinted = false;
+
+// ============================================================
+// Wi-Fi credentials: saved ESP32 config -> project NVS -> one-time Serial
+// ============================================================
+
+static bool waitForWiFi(uint32_t timeoutMs)
+{
+  const uint32_t t0 = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - t0 < timeoutMs)
+  {
+    Serial.print('.');
+    delay(300);
+  }
+  Serial.println();
+  return WiFi.status() == WL_CONNECTED;
+}
+
+static void printWiFiPass()
+{
+  Serial.printf("WiFi PASS | SSID=%s IP=%s RSSI=%d dBm\n",
+                WiFi.SSID().c_str(),
+                WiFi.localIP().toString().c_str(),
+                WiFi.RSSI());
+}
+
+static bool connectWithCredentials(const String &ssid, const String &pass, uint32_t timeoutMs = 15000)
+{
+  if (ssid.length() == 0) return false;
+
+  WiFi.disconnect(false, false);
+  delay(200);
+  WiFi.begin(ssid.c_str(), pass.c_str());
+  Serial.printf("WiFi connecting to %s", ssid.c_str());
+  return waitForWiFi(timeoutMs);
+}
+
+static String readSerialLineBlocking(const char *prompt)
+{
+  Serial.print(prompt);
+  while (!Serial.available()) delay(20);
+  String s = Serial.readStringUntil('\n');
+  s.trim();
+  return s;
+}
+
+static bool loadProjectWiFi(String &ssid, String &pass)
+{
+  Preferences prefs;
+  if (!prefs.begin(WIFI_NVS_NAMESPACE, true)) return false;
+  ssid = prefs.getString(WIFI_NVS_KEY_SSID, "");
+  pass = prefs.getString(WIFI_NVS_KEY_PASS, "");
+  prefs.end();
+  return ssid.length() > 0;
+}
+
+static bool saveProjectWiFi(const String &ssid, const String &pass)
+{
+  Preferences prefs;
+  if (!prefs.begin(WIFI_NVS_NAMESPACE, false)) return false;
+  const size_t n1 = prefs.putString(WIFI_NVS_KEY_SSID, ssid);
+  const size_t n2 = prefs.putString(WIFI_NVS_KEY_PASS, pass);
+  prefs.end();
+  return n1 > 0 && n2 > 0;
+}
+
+static bool initWiFiAuto()
+{
+  WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);
+
+  // This is expected to work immediately after the previous Test5A/Test4 Wi-Fi runs,
+  // because ESP32 normally keeps the last successful AP configuration in NVS.
+  Serial.print("WiFi: trying ESP32 saved credentials");
+  WiFi.begin();
+  if (waitForWiFi(12000))
+  {
+    printWiFiPass();
+    return true;
+  }
+
+  String ssid;
+  String pass;
+  if (loadProjectWiFi(ssid, pass))
+  {
+    Serial.println("WiFi: trying project NVS credentials");
+    if (connectWithCredentials(ssid, pass))
+    {
+      printWiFiPass();
+      return true;
+    }
+  }
+
+  Serial.println();
+  Serial.println("No usable saved Wi-Fi credentials found.");
+  Serial.println("Enter them once in Serial Monitor. They will be saved in ESP32 NVS.");
+  Serial.println("The password will not be echoed back by this sketch after entry.");
+
+  ssid = readSerialLineBlocking("SSID [DIILAB]: ");
+  if (ssid.length() == 0) ssid = DEFAULT_WIFI_SSID;
+  pass = readSerialLineBlocking("Password: ");
+
+  if (!connectWithCredentials(ssid, pass))
+  {
+    Serial.println("WiFi FAIL: credentials were not saved because connection failed.");
+    return false;
+  }
+
+  if (saveProjectWiFi(ssid, pass))
+    Serial.println("WiFi credentials saved to ESP32 NVS for future test sketches.");
+  else
+    Serial.println("WARNING: WiFi connected, but project NVS save failed.");
+
+  printWiFiPass();
+  return true;
+}
 
 // ============================================================
 // Camera
@@ -430,14 +553,12 @@ bool uploadBMI260Config()
 
 bool configureBMI260Sensors()
 {
-  // Accel: 100 Hz, +/-2 g.
-  if (!imuWriteReg(REG_ACC_CONF, 0xA8)) return false;
+  if (!imuWriteReg(REG_ACC_CONF, 0xA8)) return false; // 100 Hz, +/-2 g
   delayMicroseconds(500);
   if (!imuWriteReg(REG_ACC_RANGE, 0x00)) return false;
   delayMicroseconds(500);
 
-  // Gyro: 100 Hz, +/-2000 dps.
-  if (!imuWriteReg(REG_GYR_CONF, 0xE8)) return false;
+  if (!imuWriteReg(REG_GYR_CONF, 0xE8)) return false; // 100 Hz, +/-2000 dps
   delayMicroseconds(500);
   if (!imuWriteReg(REG_GYR_RANGE, 0x00)) return false;
   delayMicroseconds(500);
@@ -511,7 +632,6 @@ bool initSensorBusAndBMI260()
 
 void readImuOnce()
 {
-  // Also prove PCA upstream device remains responsive while all other subsystems run.
   if (!i2cAck(PCA_ADDR))
   {
     pcaErrors++;
@@ -550,7 +670,7 @@ void readImuOnce()
 }
 
 // ============================================================
-// Health / Wi-Fi
+// Health
 // ============================================================
 
 void printHealth()
@@ -603,12 +723,14 @@ void stopForever(const char *msg)
 void setup()
 {
   Serial.begin(115200);
+  Serial.setTimeout(120000);
   delay(2000);
 
   Serial.println();
   Serial.println("========================================================");
   Serial.println("YINLING-ZHIHU B1 TEST5B CONCURRENCY STRESS");
   Serial.println("WiFi + OV5640 + MIC RX + MAX98357A TX + BMI260/PCA");
+  Serial.println("WiFi credentials: AUTO FROM NVS; serial entry only if missing");
   Serial.println("HAPTIC IS EXCLUDED");
   Serial.println("========================================================");
 
@@ -629,31 +751,10 @@ void setup()
 
   if (!initSensorBusAndBMI260())
     stopForever("SENSOR BUS / BMI260 INIT: FAIL");
-
   Serial.println("SENSOR BUS / BMI260 INIT: PASS");
 
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
-  Serial.print("WiFi connecting");
-
-  const uint32_t w0 = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - w0 < 15000)
-  {
-    Serial.print('.');
-    delay(300);
-  }
-  Serial.println();
-
-  if (WiFi.status() == WL_CONNECTED)
-  {
-    Serial.printf("WiFi PASS | IP=%s RSSI=%d dBm\n",
-                  WiFi.localIP().toString().c_str(),
-                  WiFi.RSSI());
-  }
-  else
-  {
-    Serial.println("WiFi FAIL - check local WIFI_PASS");
-  }
+  if (!initWiFiAuto())
+    stopForever("WIFI INIT: FAIL");
 
   lastWifiState = (uint32_t)WiFi.status();
   testStartMs = millis();
@@ -681,9 +782,7 @@ void loop()
     lastToneToggleMs = now;
   }
 
-  // MIC stays active continuously; this call consumes about 500 ms of RX data.
   readMic500ms();
-
   now = millis();
 
   if (now - lastImuMs >= 1000)
