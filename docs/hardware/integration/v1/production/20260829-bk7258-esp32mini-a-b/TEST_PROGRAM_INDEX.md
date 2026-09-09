@@ -4,7 +4,8 @@
 
 ## 当前测试程序
 
-- [Test 5C OFFLINE｜20 次真实断电冷启动（无 Wi-Fi 环境）](./ESP32_TEST5C_OFFLINE_COLD_BOOT_20X_20260909.ino)
+- [Test 5C OFFLINE V2｜20 次真实断电冷启动（无 Wi-Fi 环境，推荐）](./ESP32_TEST5C_OFFLINE_COLD_BOOT_20X_V2_20260909.ino)
+- [Test 5C OFFLINE V1｜旧版，仅保留追溯](./ESP32_TEST5C_OFFLINE_COLD_BOOT_20X_20260909.ino)
 - [Test 5C｜20 次真实冷启动验证（含 Wi-Fi）](./ESP32_TEST5C_COLD_BOOT_20X_20260909.ino)
 - [Test 5B｜Wi-Fi + Camera + MIC + Audio + IMU/PCA](./ESP32_TEST5B_WIFI_CAMERA_AUDIO_IMU_STRESS_20260909.ino)
 - [Test 5A｜Wi-Fi + Camera + MIC + Audio](./ESP32_TEST5A_WIFI_CAMERA_AUDIO_STRESS_20260908.ino)
@@ -23,3 +24,4 @@
 - 对话里给测试程序时，优先直接给该文件 GitHub 链接，不再让用户依赖全局 Code Search。
 - Wi-Fi 凭据由 ESP32 已保存凭据 / NVS 复用，不在仓库里保存真实密码。
 - 无目标 AP/Wi-Fi 环境时，不应把 `WIFI INIT FAIL` 解释成板级冷启动失败；改用 Test 5C OFFLINE 验证其他硬件链路。
+- Test 5C OFFLINE V1 存在显示逻辑歧义：上传/复位后的非 POWERON 启动虽然不会写入 pass/fail 计数，但 15 秒后仍会打印 `THIS OFFLINE BOOT: PASS`，且之后持续输出日志。V2 已修正：非 POWERON 只打印 `PRECHECK ... NOT COUNTED`；只有 `RESET REASON: POWERON` 才能判冷启动 PASS/FAIL；15 秒判定后停止前台刷屏并等待下一次真实断电上电。
