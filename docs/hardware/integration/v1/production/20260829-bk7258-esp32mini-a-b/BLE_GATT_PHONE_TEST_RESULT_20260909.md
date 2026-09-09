@@ -1,22 +1,22 @@
 # BLE GATT 手机测试记录（2026-09-09）
 
-状态：IN PROGRESS / PARTIAL PASS
+状态：READY FOR FINAL PASS / ALL REQUIREMENTS MET EXCEPT FINAL PASS COMMAND
 
 程序：`ESP32_BLE_GATT_PHONE_TEST_20260909.ino`
 
-当前实测：
+## 当前实测
 
 ```text
 connected=1
-connectCount=2
-disconnectCount=1
-writeCount=2
-notifyCount>=1200
+connectCount=3
+disconnectCount=2
+writeCount=3
+notifyCount>=2090
 pingSeen=1
 echoSeen=1
-notifyAckSeen=0
+notifyAckSeen=1
 passLatched=0
-heap=180360 B
+heap≈180360 B（断开时约 180404 B）
 ```
 
 关键日志：
@@ -24,25 +24,58 @@ heap=180360 B
 ```text
 BLE RX #1: PING
 BLE TX: PONG
+
 BLE RX #2: ECHO 12345
 BLE TX: ECHO:12345
+
+BLE RX #3: NOTIFY_OK
+BLE TX: NOTIFY_ACK_RECORDED
+
+BLE DISCONNECTED | disconnectCount=2
+BLE ADVERTISING RESTARTED
+BLE CONNECTED | connectCount=3
 ```
 
-因此当前已确认：
+## 已确认
 
 - BLE advertising / iPhone discovery：PASS
 - BLE connection：PASS
-- disconnect + reconnect：PASS（目前累计连接 2 次）
-- GATT TX Notify：PASS，SEQ 持续增长到 1200+
+- disconnect + advertising restart + reconnect：PASS
+- 第 3 次连接达成：PASS（`connectCount=3`）
+- GATT TX Read：PASS
+- GATT TX Notify：PASS，SEQ 持续增长至 2000+
 - GATT RX Write：PASS
 - `PING -> PONG` 双向命令链路：PASS
 - `ECHO 12345 -> ECHO:12345` 双向数据链路：PASS
-- Heap 在长时间观察段稳定为约 180360 B
+- 手机已确认持续收到 Notify，并回写 `NOTIFY_OK`：PASS
+- Heap 长时间观察稳定在约 180360 B；断开时短暂约 180404 B，无持续下降
 
-尚未完成：
+## 最后一步
 
-1. 向 RX 写 `NOTIFY_OK`，记录手机确实收到持续通知
-2. 再断开并重连一次，使 `connectCount >= 3`
-3. 最后写 `PASS`，触发正式 `BLE GATT PHONE TEST: PASS` 和 PASS 提示音
+程序正式门槛：
 
-当前不能关闭为最终 PASS，因为程序正式门槛为：`connectCount>=3 && pingSeen && echoSeen && notifyAckSeen`。
+```text
+connectCount >= 3
+pingSeen = 1
+echoSeen = 1
+notifyAckSeen = 1
+```
+
+当前四项已经全部满足。现在只需在 RX / A001 写入：
+
+```text
+PASS
+```
+
+预期：
+
+```text
+BLE RX #4: PASS
+BLE TX: TEST PASS
+================ BLE TEST RESULT ================
+BLE GATT PHONE TEST: PASS
+...
+AUDIO CUE: PASS
+```
+
+在看到正式 `BLE GATT PHONE TEST: PASS` 前，记录仍不关闭为最终 PASS。
