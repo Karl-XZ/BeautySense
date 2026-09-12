@@ -157,10 +157,11 @@ class SpatialAudio {
     }
 
     /**
-     * BeautySense 变频声学测距与双耳空间导向雷达 (Acoustic Spatial Radar)
-     * 无需触觉马达，利用左右耳双声道立体声平衡度与变频音律节奏指引空间方位与精细对齐
+     * BeautySense 双耳立体声空间音频导向 (Stereo Spatial Audio Guidance)
+     * 纯软件算法：硬件仅需普通摄像头与普通立体声扬声器/耳机。
+     * 由摄像头视觉模型计算手部与五官相对偏差，再由双声道立体声平衡 (Stereo Pan) 与变频提示音指引空间方位与精细对齐。
      */
-    playAcousticRadarPulse(x = 0, y = 0, isTargetZone = false) {
+    playSpatialAudioPulse(x = 0, y = 0, isTargetZone = false) {
         if (!this.ctx) return;
         this.ctx.resume();
         const dist = Math.sqrt(x * x + y * y);
@@ -193,6 +194,10 @@ class SpatialAudio {
 
         o.start(now);
         o.stop(now + dur);
+    }
+
+    playAcousticRadarPulse(x = 0, y = 0, isTargetZone = false) {
+        this.playSpatialAudioPulse(x, y, isTargetZone);
     }
 
     /**
