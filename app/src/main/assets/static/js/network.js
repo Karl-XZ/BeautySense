@@ -122,6 +122,12 @@ function handleServerMessage(data) {
         case 'inquiry_result':
             markNativeResponseDone();
             updateInquiryUI(data);
+            if (data.speech) {
+                updateAiCaption(data.speech);
+            }
+            if (data.plan && Array.isArray(data.plan)) {
+                updateTaskUI(data);
+            }
             break;
         case 'care_record':
             reportCareEvent({

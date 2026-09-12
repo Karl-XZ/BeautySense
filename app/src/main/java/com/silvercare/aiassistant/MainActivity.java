@@ -1552,6 +1552,7 @@ public class MainActivity extends Activity
         if (!ensureAiRuntimeReady()) {
             return;
         }
+        sendSpeechTranscript(transcript);
         executor.execute(() -> processor.processTextInquiry(imageDataUrl, transcript));
     }
 
@@ -3344,6 +3345,11 @@ public class MainActivity extends Activity
         @JavascriptInterface
         public void sendInquiryData(String imageDataUrl, String audioDataUrl) {
             submitInquiry(imageDataUrl, audioDataUrl);
+        }
+
+        @JavascriptInterface
+        public void sendTextInquiry(String imageDataUrl, String text) {
+            submitTextInquiry(imageDataUrl, text);
         }
 
         @JavascriptInterface

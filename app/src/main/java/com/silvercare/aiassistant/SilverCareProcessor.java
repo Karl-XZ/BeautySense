@@ -1899,9 +1899,11 @@ final class SilverCareProcessor {
     }
 
     private boolean isBeautyStartCommand(String text) {
-        return text.contains("化妆") || text.contains("化个妆") || text.contains("怎么化") ||
+        return (text.contains("化") && text.contains("妆")) ||
+               text.contains("化妆") || text.contains("化个妆") || text.contains("怎么化") ||
                text.contains("搭配妆容") || text.contains("开始化") || text.contains("上妆") ||
-               text.contains("涂口红") || text.contains("化眼妆") || text.contains("画眉毛");
+               text.contains("涂口红") || text.contains("化眼妆") || text.contains("画眉毛") ||
+               text.contains("做造型") || text.contains("美妆");
     }
 
     private boolean isUserAgreement(String text) {
