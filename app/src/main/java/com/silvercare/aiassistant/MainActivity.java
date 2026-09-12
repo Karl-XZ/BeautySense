@@ -3385,5 +3385,17 @@ public class MainActivity extends Activity
         public void openKeySettings() {
             runOnUiThread(MainActivity.this::showApiKeyDialog);
         }
+
+        @JavascriptInterface
+        public void setBeautyMode(String mode) {
+            if (processor != null) {
+                processor.setBeautyMode(mode);
+            }
+        }
+
+        @JavascriptInterface
+        public String getBeautyMode() {
+            return processor != null ? processor.getBeautyMode() : "general";
+        }
     }
 }

@@ -6,8 +6,8 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
-    <meta name="description" content="面向老年人、长护对象、照护者、家庭成员和居家照护与家庭看护场景的多模态居家长护辅助与跌倒风险预警系统" />
-    <title>银龄智护</title>
+    <meta name="description" content="欧莱雅 2026 黑客松赛道3：BeautySense 多模态头戴式 AI 美妆伴侣" />
+    <title>BeautySense 无界美妆伴侣</title>
 
     <link rel="stylesheet" href="static/css/main.css" />
     <link rel="manifest" href="static/manifest.json" />
@@ -48,19 +48,24 @@
       role="img"
     ></video>
 
-    <main class="app-shell" aria-label="银龄智护 导航界面">
+    <main class="app-shell" aria-label="BeautySense 美妆界面">
       <header class="top-app-bar" role="banner">
-        <div class="brand-lockup" aria-label="银龄智护">
+        <div class="brand-lockup" aria-label="BeautySense">
           <div class="brand-mark" aria-hidden="true">
             <img src="static/images/icon-512.png" alt="" />
           </div>
           <div>
-            <div class="brand-name">银龄智护</div>
-            <div id="runtimeSubtitle" class="brand-subtitle">银龄智护端侧智能照护版 · 端侧离线模式</div>
+            <div class="brand-name">BeautySense</div>
+            <div id="runtimeSubtitle" class="brand-subtitle">欧莱雅 2026 赛道3 · 多模态无界美妆伴侣</div>
           </div>
         </div>
 
         <div class="top-actions">
+          <div class="beauty-mode-switch" role="group" aria-label="模式切换">
+            <button id="modeGeneralBtn" class="mode-btn active" type="button">普通模式</button>
+            <button id="modeAccessibleBtn" class="mode-btn" type="button">无障碍</button>
+          </div>
+
           <div id="statusPill" class="status-pill" role="status" aria-live="polite">
             <div id="statusDot" class="status-dot"></div>
             <span id="statusText" class="status-text">就绪</span>
@@ -69,7 +74,7 @@
             id="managementCommand"
             class="icon-button"
             type="button"
-            aria-label="打开长护管理端"
+            aria-label="打开梳妆台与记录管理端"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M4 19V5" />
@@ -96,6 +101,10 @@
       </header>
 
       <section class="camera-stage" aria-label="实时视觉区域">
+        <button id="nearSightedZoomBtn" class="near-sighted-zoom-btn" type="button" aria-label="近视摘镜 2.5x 放大">
+          <span>👓 近视 2.5x 放大</span>
+        </button>
+
         <div class="scan-reticle" aria-hidden="true">
           <span></span>
           <span></span>
@@ -122,30 +131,30 @@
             <span id="userCaption" class="caption-text">长按提问后，识别文字会显示在这里</span>
           </div>
           <div class="caption-row ai">
-            <span class="caption-speaker">AI 回复</span>
-            <span id="aiCaption" class="caption-text">AI 回复会显示在这里</span>
+            <span class="caption-speaker">AI 伴侣</span>
+            <span id="aiCaption" class="caption-text">AI 建议与指导会显示在这里</span>
           </div>
         </div>
       </section>
 
-      <section class="quick-metrics" aria-label="导航状态">
+      <section class="quick-metrics" aria-label="美妆导航状态">
         <div class="metric-tile">
-          <span class="metric-label">距离</span>
+          <span class="metric-label">对齐偏差</span>
           <strong id="distVal" class="metric-value">--</strong>
         </div>
         <div class="metric-tile">
-          <span class="metric-label">方向</span>
+          <span class="metric-label">声学方位</span>
           <strong id="dirVal" class="metric-value">--</strong>
         </div>
         <div class="metric-tile">
-          <span class="metric-label">延迟</span>
-          <strong id="latVal" class="metric-value">--</strong>
+          <span class="metric-label">质检状态</span>
+          <strong id="latVal" class="metric-value">就绪</strong>
         </div>
       </section>
 
-      <aside id="task-hud" class="task-sheet" role="complementary" aria-label="当前任务步骤">
+      <aside id="task-hud" class="task-sheet" role="complementary" aria-label="当前美妆步骤">
         <div class="sheet-handle" aria-hidden="true"></div>
-        <div class="task-header">交互式引导</div>
+        <div class="task-header">欧莱雅美学妆容 SOP</div>
         <div id="taskList" role="list"></div>
         <div
           id="taskFeedback"

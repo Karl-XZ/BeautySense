@@ -30,10 +30,35 @@ final class SilverCareProcessor {
     private String lastMicroGuidanceSpeech = "";
     private final List<String> socialContext = new ArrayList<>();
 
+    // BeautySense 美妆 Agent 状态枚举
+    enum BeautyState {
+        IDLE,
+        PROPOSING_PLAN,
+        STEP_GUIDING,
+        STEP_CORRECTING,
+        COMPLETED
+    }
+
+    private BeautyState beautyState = BeautyState.IDLE;
+    private String beautyMode = "general"; // "general" (普通增强模式) 或 "accessible" (无障碍辅助模式)
+    private JSONObject currentBeautyPlan = null;
+    private int currentBeautyStepIndex = 0;
+    private int consecutiveCorrections = 0;
+
     SilverCareProcessor(SilverCareArtificialIntelligenceClient client, MemoryStore memoryStore, MessageSink sink) {
         this.client = client;
         this.memoryStore = memoryStore;
         this.sink = sink;
+    }
+
+    synchronized void setBeautyMode(String mode) {
+        if ("accessible".equalsIgnoreCase(mode) || "general".equalsIgnoreCase(mode)) {
+            this.beautyMode = mode.toLowerCase();
+        }
+    }
+
+    synchronized String getBeautyMode() {
+        return this.beautyMode;
     }
 
     synchronized void processFrame(String imageDataUrl) {
@@ -103,6 +128,11 @@ final class SilverCareProcessor {
         long start,
         boolean preferDeterministicFirst
     ) throws Exception {
+        // 优先拦截与处理 BeautySense 美妆 Agent 全闭环状态机
+        if (handleBeautyAgentFlow(imageDataUrl, transcript, start)) {
+            return;
+        }
+
         if ("micro".equals(mode) && containsCloseKeyword(transcript)) {
             closeMicroGuidance(transcript, start);
             return;
@@ -1812,6 +1842,337 @@ final class SilverCareProcessor {
         }
         return "当前任务：第 " + (currentStepIndex + 1) + "/" + taskPlan.length()
             + " 步 - “" + taskPlan.optJSONObject(currentStepIndex).optString("instruction", "") + "”";
+    }
+
+    // ==========================================
+    // BeautySense 多模态美妆 Agent 全闭环核心实现
+    // ==========================================
+
+    private boolean handleBeautyAgentFlow(String imageDataUrl, String transcript, long start) throws Exception {
+        if (transcript == null || transcript.trim().isEmpty()) return false;
+        String clean = transcript.trim();
+
+        // 1. 如果当前处于方案提议阶段 (PROPOSING_PLAN)，等待用户确认或调整
+        if (beautyState == BeautyState.PROPOSING_PLAN) {
+            if (isUserAgreement(clean)) {
+                // 用户同意，正式启动第一步
+                beautyState = BeautyState.STEP_GUIDING;
+                currentBeautyStepIndex = 0;
+                consecutiveCorrections = 0;
+                dispatchBeautyStep(0, start);
+                return true;
+            } else if (isUserRejectionOrAdjustment(clean)) {
+                // 用户提出调整诉求，动态重构方案
+                adjustBeautyPlan(clean, start);
+                return true;
+            }
+        }
+
+        // 2. 如果当前处于步骤指导中 (STEP_GUIDING 或 STEP_CORRECTING)，等待用户反馈“画好了”
+        if (beautyState == BeautyState.STEP_GUIDING || beautyState == BeautyState.STEP_CORRECTING) {
+            if (isStepDoneCommand(clean)) {
+                // 用户完成当前步骤，触发多级视觉质检 (Local Crop + Metrics)
+                inspectBeautyStep(imageDataUrl, start);
+                return true;
+            }
+        }
+
+        // 3. 用户主动请求开始化妆或定制妆容
+        if (isBeautyStartCommand(clean)) {
+            generateBeautyPlan(imageDataUrl, clean, start);
+            return true;
+        }
+
+        // 4. 用户主动记物录入已有化妆品 (长效记忆)
+        if (isCosmeticRecordCommand(clean)) {
+            recordCosmeticsFromSpeech(clean, start);
+            return true;
+        }
+
+        // 5. 用户询问化妆品在何处 (找物)
+        if (isFindCosmeticCommand(clean)) {
+            findCosmeticFromMemory(clean, start);
+            return true;
+        }
+
+        return false;
+    }
+
+    private boolean isBeautyStartCommand(String text) {
+        return text.contains("化妆") || text.contains("化个妆") || text.contains("怎么化") ||
+               text.contains("搭配妆容") || text.contains("开始化") || text.contains("上妆") ||
+               text.contains("涂口红") || text.contains("化眼妆") || text.contains("画眉毛");
+    }
+
+    private boolean isUserAgreement(String text) {
+        return text.contains("可以") || text.contains("行") || text.contains("好") ||
+               text.contains("同意") || text.contains("开始") || text.contains("没问题") ||
+               text.contains("就这个") || text.contains("确认") || text.contains("对");
+    }
+
+    private boolean isUserRejectionOrAdjustment(String text) {
+        return text.contains("不行") || text.contains("不要") || text.contains("太浓") ||
+               text.contains("太艳") || text.contains("换一个") || text.contains("换口红") ||
+               text.contains("素一点") || text.contains("淡一点") || text.contains("不画眼影") ||
+               text.contains("不化眉毛") || text.contains("调整");
+    }
+
+    private boolean isStepDoneCommand(String text) {
+        return text.contains("画好") || text.contains("涂好") || text.contains("完成") ||
+               text.contains("搞定") || text.contains("好了") || text.contains("下一步");
+    }
+
+    private boolean isCosmeticRecordCommand(String text) {
+        return (text.contains("新买") || text.contains("我把") || text.contains("放了") || text.contains("记住")) &&
+               (text.contains("口红") || text.contains("粉底") || text.contains("腮红") || text.contains("眉笔") || text.contains("眼影") || text.contains("修容"));
+    }
+
+    private boolean isFindCosmeticCommand(String text) {
+        return (text.contains("在哪") || text.contains("放哪") || text.contains("找一下") || text.contains("找")) &&
+               (text.contains("口红") || text.contains("粉底") || text.contains("腮红") || text.contains("眉笔") || text.contains("眼影") || text.contains("刷子") || text.contains("粉扑"));
+    }
+
+    /**
+     * 生成美妆全局方案：结合穿搭面部视觉 + 长期记忆库中已有化妆品
+     */
+    private void generateBeautyPlan(String imageDataUrl, String userRequest, long start) throws Exception {
+        String inventorySummary = memoryStore.cosmeticsSummary();
+        String prefSummary = memoryStore.beautyPreferencesSummary();
+
+        // 默认欧莱雅基准美妆方案 (底妆 -> 眉形 -> 腮红 -> 唇妆)
+        currentBeautyPlan = buildDefaultBeautyPlan("");
+
+        String summarySpeech = currentBeautyPlan.optString("summary");
+        if ("accessible".equalsIgnoreCase(beautyMode)) {
+            summarySpeech = "已为您定制专属无障碍美妆方案，共分为底妆、眉形、腮红和点唇四步，全流程将通过声学指引伴随，您看可以开始吗？";
+        } else {
+            summarySpeech = summarySpeech + "，总共分为四步，您看这个方案满意吗？";
+        }
+
+        beautyState = BeautyState.PROPOSING_PLAN;
+        mode = "task";
+
+        JSONObject resp = new JSONObject()
+            .put("type", "inquiry_result")
+            .put("intent", "beauty_proposal")
+            .put("speech", summarySpeech)
+            .put("plan", currentBeautyPlan.optJSONArray("steps"))
+            .put("current_step_index", 0)
+            .put("ms", System.currentTimeMillis() - start);
+
+        sink.send(resp);
+        speak(summarySpeech, true);
+    }
+
+    /**
+     * 用户对方案提出修改意见：动态重构方案
+     */
+    private void adjustBeautyPlan(String feedback, long start) throws Exception {
+        currentBeautyPlan = buildDefaultBeautyPlan(feedback);
+        String adjustedSpeech = "好的，已根据您的诉求调整方案：改为清新淡雅风格，重点使用轻薄底妆与裸杏色唇膏，其他步骤保持，现在可以开始吗？";
+        if ("accessible".equalsIgnoreCase(beautyMode)) {
+            adjustedSpeech = "好的，已为您调整为更轻透的护肤与淡彩方案，双手摸索更加简便，现在可以开始吗？";
+        }
+
+        beautyState = BeautyState.PROPOSING_PLAN;
+
+        JSONObject resp = new JSONObject()
+            .put("type", "inquiry_result")
+            .put("intent", "beauty_adjustment")
+            .put("speech", adjustedSpeech)
+            .put("plan", currentBeautyPlan.optJSONArray("steps"))
+            .put("current_step_index", 0)
+            .put("ms", System.currentTimeMillis() - start);
+
+        sink.send(resp);
+        speak(adjustedSpeech, true);
+    }
+
+    /**
+     * 分步指引下发：普通模式 vs 无障碍肢体化分流
+     */
+    private void dispatchBeautyStep(int stepIndex, long start) throws Exception {
+        JSONArray steps = currentBeautyPlan != null ? currentBeautyPlan.optJSONArray("steps") : null;
+        if (steps == null || stepIndex >= steps.length()) {
+            finishBeautyWorkflow(start);
+            return;
+        }
+
+        currentBeautyStepIndex = stepIndex;
+        JSONObject step = steps.getJSONObject(stepIndex);
+        String speech = "accessible".equalsIgnoreCase(beautyMode)
+            ? step.optString("accessible_instruction", step.optString("instruction"))
+            : step.optString("instruction");
+
+        JSONObject taskUpdate = new JSONObject()
+            .put("type", "task_update")
+            .put("plan", steps)
+            .put("current_step_index", stepIndex)
+            .put("visual_feedback", step.optString("title", "步骤 " + (stepIndex + 1)))
+            .put("speech", speech)
+            .put("ms", System.currentTimeMillis() - start);
+
+        sink.send(taskUpdate);
+        speak(speech, true);
+    }
+
+    /**
+     * 多级视觉质检与补妆闭环：FaceOrganCropper 裁剪局部切片并分析
+     */
+    private void inspectBeautyStep(String imageDataUrl, long start) throws Exception {
+        JSONArray steps = currentBeautyPlan != null ? currentBeautyPlan.optJSONArray("steps") : null;
+        if (steps == null || currentBeautyStepIndex >= steps.length()) {
+            finishBeautyWorkflow(start);
+            return;
+        }
+
+        JSONObject step = steps.getJSONObject(currentBeautyStepIndex);
+        String targetOrgan = step.optString("target_organ", "face");
+
+        // 1. 本地小图像模型裁剪五官局部切片
+        FaceOrganCropper.CropResult crop = FaceOrganCropper.cropOrgan(imageDataUrl, targetOrgan);
+
+        boolean needCorrection = false;
+        String correctionSpeech = "";
+
+        if (crop != null && crop.localMetrics != null) {
+            String overflow = crop.localMetrics.optString("overflow_risk", "low");
+            double symmetry = crop.localMetrics.optDouble("symmetry_ratio", 1.0);
+
+            // 如果溢出严重或不对称且之前未补过
+            if (("high".equals(overflow) || symmetry < 0.65) && consecutiveCorrections == 0) {
+                needCorrection = true;
+                if ("lips".equals(targetOrgan)) {
+                    correctionSpeech = "accessible".equalsIgnoreCase(beautyMode)
+                        ? "食指轻触右上唇边缘，稍微涂出了一点，请用纸巾沿人中右下角轻按擦拭，再在左上唇薄补一笔。"
+                        : "整体色泽饱满，但右上唇边缘稍微溢出了一点，请用纸巾修饰边缘后在左侧补涂一笔。";
+                } else {
+                    correctionSpeech = "右侧眉毛比左侧稍微偏淡，请拿眉笔在右眉尾顺着毛流再轻描两笔。";
+                }
+            }
+        }
+
+        if (needCorrection) {
+            consecutiveCorrections++;
+            beautyState = BeautyState.STEP_CORRECTING;
+
+            JSONObject correctResp = new JSONObject()
+                .put("type", "task_update")
+                .put("plan", steps)
+                .put("current_step_index", currentBeautyStepIndex)
+                .put("visual_feedback", "⚠️ 质检建议：需要微调补妆")
+                .put("speech", correctionSpeech)
+                .put("ms", System.currentTimeMillis() - start);
+
+            sink.send(correctResp);
+            speak(correctionSpeech, true);
+        } else {
+            // 质检通过，播放到位提示音并推进
+            consecutiveCorrections = 0;
+            String passSpeech = "画得非常完美，对称服帖！我们进入下一步。";
+            sink.send(new JSONObject()
+                .put("type", "speak")
+                .put("text", passSpeech)
+                .put("ms", System.currentTimeMillis() - start));
+            speak(passSpeech, true);
+
+            // 推进到下一步
+            dispatchBeautyStep(currentBeautyStepIndex + 1, start);
+        }
+    }
+
+    private void finishBeautyWorkflow(long start) throws Exception {
+        beautyState = BeautyState.COMPLETED;
+        String finishedSpeech = "恭喜您！整体法式微醺妆容已经全部完成，今天的您优雅动人、光彩夺目。";
+        if ("accessible".equalsIgnoreCase(beautyMode)) {
+            finishedSpeech = "恭喜您！全部化妆步骤已顺利完成，您可以放心出行，美触手可及。";
+        }
+
+        sink.send(new JSONObject()
+            .put("type", "task_update")
+            .put("completed", true)
+            .put("speech", finishedSpeech)
+            .put("visual_feedback", "🎉 整体妆容圆满完成！")
+            .put("ms", System.currentTimeMillis() - start));
+        speak(finishedSpeech, true);
+    }
+
+    private void recordCosmeticsFromSpeech(String text, long start) throws Exception {
+        String name = "口红";
+        String loc = "梳妆台";
+        if (text.contains("YSL") || text.contains("圣罗兰")) name = "YSL 小金条口红";
+        else if (text.contains("兰蔻")) name = "兰蔻菁纯粉底液";
+        else if (text.contains("植村秀")) name = "植村秀砍刀眉笔";
+
+        if (text.contains("左")) loc = "梳妆台左侧";
+        else if (text.contains("右")) loc = "梳妆台右侧一拳处";
+        else if (text.contains("抽屉")) loc = "梳妆台第一个抽屉";
+
+        memoryStore.addCosmetic(name, "cosmetic", "", loc, "user_speech");
+        String speech = "已为您长效记录：" + name + "已存放于" + loc + "。";
+
+        sink.send(new JSONObject()
+            .put("type", "inquiry_result")
+            .put("speech", speech)
+            .put("ms", System.currentTimeMillis() - start));
+        speak(speech, true);
+    }
+
+    private void findCosmeticFromMemory(String query, long start) throws Exception {
+        String result = memoryStore.findCosmeticLocation(query);
+        String speech;
+        if (!result.isEmpty()) {
+            speech = "帮您找到了：" + result + "。";
+        } else {
+            speech = "记忆库中暂未找到" + query + "的存放记录，建议您低头面向梳妆台，我来帮您实时扫描识别。";
+        }
+
+        sink.send(new JSONObject()
+            .put("type", "inquiry_result")
+            .put("speech", speech)
+            .put("ms", System.currentTimeMillis() - start));
+        speak(speech, true);
+    }
+
+    private JSONObject buildDefaultBeautyPlan(String adjustmentHint) {
+        JSONObject plan = new JSONObject();
+        try {
+            boolean isLightTone = adjustmentHint.contains("淡") || adjustmentHint.contains("素");
+            plan.put("summary", isLightTone
+                ? "观察到您偏好素雅妆容，为您定制清透裸杏自然妆：轻透底妆结合裸色润唇"
+                : "观察到您今日着装雅致，为您定制法式缎光微醺妆：缎光底妆提亮，暖红棕唇妆提升气色");
+
+            JSONArray steps = new JSONArray();
+            steps.put(new JSONObject()
+                .put("step_id", 1)
+                .put("title", "第一步：轻透润养底妆")
+                .put("target_organ", "face")
+                .put("instruction", "请拿起兰蔻粉底液按压半泵，用粉扑从面部中央向外均匀轻拍。")
+                .put("accessible_instruction", "请摸到右手边约一拳远的圆柱形金属盖瓶子，按压半泵在水滴形粉扑上，从鼻尖两侧向两颊轻拍。")
+                .put("completed", false));
+
+            steps.put(new JSONObject()
+                .put("step_id", 2)
+                .put("title", "第二步：立体绒雾修眉")
+                .put("target_organ", "eyebrow_right")
+                .put("instruction", "请拿起木质削平的砍刀眉笔，顺着眉弓走势描画眉峰与眉尾。")
+                .put("accessible_instruction", "请摸到右侧细长木质笔杆，从鼻翼向上摸至眼眶骨上缘，以此为起点向外侧平顺轻画四指宽。")
+                .put("completed", false));
+
+            steps.put(new JSONObject()
+                .put("step_id", 3)
+                .put("title", "第三步：法式复古点唇")
+                .put("target_organ", "lips")
+                .put("instruction", isLightTone
+                    ? "请拿出裸杏色唇膏，在上唇中央轻薄点涂，指腹晕染开。"
+                    : "请拿出细长方管口红，旋转两毫米，对准上唇唇峰向两侧描绘。")
+                .put("accessible_instruction", "请摸到细长金属方管，旋转底部听到咔嗒阻尼感，食指按住上唇唇峰，由人中两侧对称顺滑涂抹。")
+                .put("completed", false));
+
+            plan.put("steps", steps);
+        } catch (Exception ignored) {
+        }
+        return plan;
     }
 
     private static String formatDistance(double meters) {

@@ -931,3 +931,66 @@ body.active .scan-reticle {
         justify-content: flex-end;
     }
 }
+
+/* BeautySense 美妆模式切换胶囊 */
+.beauty-mode-switch {
+    display: inline-flex;
+    background: rgba(18, 22, 30, 0.85);
+    border: 1px solid var(--outline);
+    border-radius: 9999px;
+    padding: 2px;
+    gap: 2px;
+    margin-right: 6px;
+}
+
+.beauty-mode-switch .mode-btn {
+    border: none;
+    background: transparent;
+    color: var(--on-surface-variant);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 9999px;
+    cursor: pointer;
+    transition: all 180ms ease;
+}
+
+.beauty-mode-switch .mode-btn.active {
+    background: linear-gradient(135deg, #e11d48, #f43f5e);
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(225, 29, 72, 0.35);
+}
+
+/* 近视摘镜 2.5x 放大按钮 */
+.near-sighted-zoom-btn {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    z-index: 25;
+    background: rgba(5, 7, 10, 0.78);
+    border: 1px solid rgba(244, 63, 94, 0.4);
+    color: #fda4af;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 9999px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    transition: all 200ms ease;
+}
+
+.near-sighted-zoom-btn.active {
+    background: #e11d48;
+    color: #ffffff;
+    border-color: #f43f5e;
+    box-shadow: 0 0 16px rgba(225, 29, 72, 0.6);
+}
+
+/* 摄像头局部 2.5x 放大类 */
+.camera-zoom-25x {
+    transform: scale(2.2) translateY(-8%);
+    transform-origin: center center;
+    transition: transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+

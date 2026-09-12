@@ -54,7 +54,11 @@ export const UI = {
     fallCountdown: document.getElementById('fallCountdown'),
     fallCountdownLabel: document.getElementById('fallCountdownLabel'),
     fallSafeButton: document.getElementById('fallSafeButton'),
-    fallAlarmButton: document.getElementById('fallAlarmButton')
+    fallAlarmButton: document.getElementById('fallAlarmButton'),
+
+    modeGeneralBtn: document.getElementById('modeGeneralBtn'),
+    modeAccessibleBtn: document.getElementById('modeAccessibleBtn'),
+    nearSightedZoomBtn: document.getElementById('nearSightedZoomBtn')
 };
 
 let feedbackTimer = null;
@@ -572,6 +576,24 @@ export function updateInquiryUI(data = {}) {
     } else if (transcript) {
         setText(UI.thinkingBox, `语音：${transcript}`);
     }
+}
+
+export function toggleNearSightedZoom() {
+    if (!UI.cam) return;
+    const isZoomed = UI.cam.classList.toggle('camera-zoom-25x');
+    UI.nearSightedZoomBtn?.classList.toggle('active', isZoomed);
+    showFeedback(isZoomed ? '已开启近视 2.5x 局部放大' : '已恢复标准视角', 1200, false);
+}
+
+export function setBeautyModeUI(mode) {
+    const isAccessible = mode === 'accessible';
+    UI.modeGeneralBtn?.classList.toggle('active', !isAccessible);
+    UI.modeAccessibleBtn?.classList.toggle('active', isAccessible);
+
+    if (window.AndroidSilverCare && typeof window.AndroidSilverCare.setBeautyMode === 'function') {
+        window.AndroidSilverCare.setBeautyMode(mode);
+    }
+    showFeedback(isAccessible ? '已切换至无障碍辅助模式 (纯肢体声学指引)' : '已切换至普通增强模式', 1500, true);
 }
 
 syncCommandState();

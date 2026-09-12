@@ -111,6 +111,13 @@ function handleServerMessage(data) {
             updateTaskUI(data);
             updateAiCaption(data.speech || data.visual_feedback);
             reportTaskCareEvent(data);
+            if (window.spatialAudio) {
+                if (data.needs_correction || (data.visual_feedback && (data.visual_feedback.includes('补') || data.visual_feedback.includes('未通过') || data.visual_feedback.includes('溢出')))) {
+                    if (typeof window.spatialAudio.playNeedsCorrection === 'function') window.spatialAudio.playNeedsCorrection();
+                } else if (data.visual_feedback && (data.visual_feedback.includes('完成') || data.visual_feedback.includes('合格') || data.visual_feedback.includes('达标'))) {
+                    if (typeof window.spatialAudio.playQualityPassed === 'function') window.spatialAudio.playQualityPassed();
+                }
+            }
             break;
         case 'inquiry_result':
             markNativeResponseDone();
@@ -374,14 +381,22 @@ function handleAudioFeedback(data) {
         const proximity = 1 - (Math.min(dist, maxDist) / maxDist);
         const now = Date.now();
         if (now - STATE.lastGeiger > (250 - (proximity * 200))) {
-            window.spatialAudio.playGeigerClick(x, y);
+            if (typeof window.spatialAudio.playAcousticRadarPulse === 'function') {
+                window.spatialAudio.playAcousticRadarPulse(x, y, action === 'push' || proximity > 0.85);
+            } else {
+                window.spatialAudio.playGeigerClick(x, y);
+            }
             STATE.lastGeiger = now;
         }
 
         if (action === 'push') {
             window.spatialAudio.stopMicroTone();
-            window.spatialAudio.playSuccess();
-            showFeedback('现在按下', 1600, false);
+            if (typeof window.spatialAudio.playQualityPassed === 'function') {
+                window.spatialAudio.playQualityPassed();
+            } else {
+                window.spatialAudio.playSuccess();
+            }
+            showFeedback('已对齐到位', 1600, false);
         }
         return;
     }

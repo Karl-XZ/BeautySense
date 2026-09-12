@@ -155,6 +155,62 @@ class SpatialAudio {
         if (dir.includes('right')) return 45;
         return 0;
     }
+
+    /**
+     * BeautySense 变频声学测距与双耳空间导向雷达 (Acoustic Spatial Radar)
+     * 无需触觉马达，利用左右耳双声道立体声平衡度与变频音律节奏指引空间方位与精细对齐
+     */
+    playAcousticRadarPulse(x = 0, y = 0, isTargetZone = false) {
+        if (!this.ctx) return;
+        this.ctx.resume();
+        const dist = Math.sqrt(x * x + y * y);
+        const maxDist = 140;
+        const proximity = 1 - (Math.min(dist, maxDist) / maxDist);
+
+        const panVal = Math.max(-1, Math.min(1, x / 60));
+        const panner = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
+        const o = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+
+        o.type = isTargetZone ? 'sine' : 'triangle';
+        o.frequency.value = isTargetZone ? 1046.5 : (360 + (proximity * 520));
+
+        if (panner) {
+            panner.pan.setValueAtTime(panVal, this.ctx.currentTime);
+            o.connect(g);
+            g.connect(panner);
+            panner.connect(this.gain);
+        } else {
+            o.connect(g);
+            g.connect(this.gain);
+        }
+
+        const now = this.ctx.currentTime;
+        const dur = isTargetZone ? 0.12 : 0.06;
+        g.gain.setValueAtTime(0, now);
+        g.gain.linearRampToValueAtTime(0.28, now + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+
+        o.start(now);
+        o.stop(now + dur);
+    }
+
+    /**
+     * 步骤完成或质检达标的正向和弦
+     */
+    playQualityPassed() {
+        this.playSuccess();
+    }
+
+    /**
+     * 质检未达标需要补涂或修正的提示音
+     */
+    playNeedsCorrection() {
+        if (!this.ctx) return;
+        this.ctx.resume();
+        this.playTone(587.33, 'triangle', 0.12);
+        setTimeout(() => this.playTone(392.00, 'sine', 0.22), 140);
+    }
 }
 
 // Global instance

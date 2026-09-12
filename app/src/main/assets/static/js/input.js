@@ -26,6 +26,8 @@ import {
     speakIfVoiceFirst,
     updateUserCaption,
     updateAiCaption,
+    toggleNearSightedZoom,
+    setBeautyModeUI,
     UI
 } from './ui.js';
 import { sendInquiryData } from './network.js';
@@ -92,7 +94,7 @@ export function setupInputs() {
     window.setInterval(sampleVideoFrame, FALL_DEFAULTS.sampleIntervalMs);
     window.setTimeout(() => {
         speakIfVoiceFirst(
-            '银龄智护 已就绪。双击屏幕启动或停止导航。长按屏幕提问。点右上角设置可以切换联网或端侧离线方案，并修改语音优先模式和跌倒检测。',
+            'BeautySense 无界美妆伴侣已就绪。长按屏幕或麦克风即可启动妆容定制与梳妆台盘点，支持普通模式与无障碍模式自由切换。',
             { minGapMs: 10000 }
         );
     }, 1200);
@@ -131,6 +133,24 @@ function setupCommandButtons() {
         event.preventDefault();
         event.stopPropagation();
         openSettings();
+    });
+
+    UI.modeGeneralBtn?.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setBeautyModeUI('general');
+    });
+
+    UI.modeAccessibleBtn?.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setBeautyModeUI('accessible');
+    });
+
+    UI.nearSightedZoomBtn?.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleNearSightedZoom();
     });
 
     if (UI.inquiryCommand) {

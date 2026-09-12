@@ -28,4 +28,24 @@ public class MemoryStoreTest {
         assertThat(history, containsString("杯子"));
         assertThat(history.split("\\R").length, equalTo(1));
     }
+
+    @Test
+    public void cosmeticsInventoryRecordsAndFindsCosmetics() {
+        MemoryStore store = new MemoryStore(new TestFakes.Preferences());
+
+        store.addCosmetic("欧莱雅小黑管口红", "唇膏", "666法式正红", "梳妆台右侧收纳盒", "manual");
+        store.addCosmetic("兰蔻菁纯散粉", "散粉", "01透明色", "梳妆台左上角", "manual");
+
+        String summary = store.cosmeticsSummary();
+        assertThat(summary, containsString("欧莱雅小黑管口红"));
+        assertThat(summary, containsString("666法式正红"));
+        assertThat(summary, containsString("梳妆台右侧收纳盒"));
+
+        String found = store.findCosmeticLocation("口红");
+        assertThat(found, containsString("欧莱雅小黑管口红"));
+        assertThat(found, containsString("梳妆台右侧收纳盒"));
+
+        store.updateBeautyPreference("风格偏好", "清透自然裸妆");
+        assertThat(store.beautyPreferencesSummary(), containsString("清透自然裸妆"));
+    }
 }
