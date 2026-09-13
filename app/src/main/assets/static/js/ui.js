@@ -185,7 +185,7 @@ export function updateAiCaption(text) {
     const clean = String(text || '').trim();
     if (!clean || !UI.aiCaption) return;
     setText(UI.aiCaption, clean);
-    if (captionsEnabled()) announce(`银龄智护：${clean}`);
+    if (captionsEnabled()) announce(`BeautySense：${clean}`);
 }
 
 export function captionsEnabled() {
@@ -403,8 +403,8 @@ export function updateRuntimeUI(data = {}) {
         : ` · ${Math.round((STATE.navigationRefreshIntervalMs || CONFIG.scanInterval) / 1000)}秒刷新`;
     const smartLabel = STATE.smartNavigationRefreshEnabled ? ' · 智能刷新' : '';
     const subtitle = mode === 'offline_mnn'
-        ? (STATE.offlineReady ? `银龄智护端侧智能照护版 · 端侧离线 · ${offlineLabel}${tuningLabel}${asrLabel}${refreshLabel}${smartLabel}` : `银龄智护端侧智能照护版 · 端侧离线未就绪 · ${offlineLabel}${tuningLabel}${refreshLabel}${smartLabel}`)
-        : `银龄智护端侧智能照护版 · 联网 DashScope 模式${asrLabel}${refreshLabel}${smartLabel}`;
+        ? (STATE.offlineReady ? `BeautySense 无界美妆伴侣 · 端侧离线 · ${offlineLabel}${tuningLabel}${asrLabel}${refreshLabel}${smartLabel}` : `BeautySense 无界美妆伴侣 · 端侧离线未就绪 · ${offlineLabel}${tuningLabel}${refreshLabel}${smartLabel}`)
+        : `BeautySense 无界美妆伴侣 · 欧莱雅美学护航 · 联网 DashScope 模式${asrLabel}${refreshLabel}${smartLabel}`;
     setText(UI.runtimeSubtitle, subtitle);
 }
 
@@ -579,8 +579,9 @@ export function updateInquiryUI(data = {}) {
 }
 
 export function toggleNearSightedZoom() {
-    if (!UI.cam) return;
-    const isZoomed = UI.cam.classList.toggle('camera-zoom-25x');
+    const camImg = document.getElementById('camImg');
+    const isZoomed = UI.cam ? UI.cam.classList.toggle('camera-zoom-25x') : false;
+    if (camImg) camImg.classList.toggle('camera-zoom-25x', isZoomed);
     UI.nearSightedZoomBtn?.classList.toggle('active', isZoomed);
     showFeedback(isZoomed ? '已开启近视 2.5x 局部放大' : '已恢复标准视角', 1200, false);
 }

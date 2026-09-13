@@ -1,21 +1,47 @@
-/* 银龄智护 Android UI - Layout */
+/* BeautySense Android UI - Layout */
 
-#cam {
+#cam,
+#camImg {
     position: fixed;
     inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
+    z-index: 1;
+    transition: opacity 300ms var(--ease-standard), filter 300ms var(--ease-standard), transform 300ms var(--ease-standard);
+}
+
+#cam {
     opacity: 0.24;
     filter: grayscale(0.2) contrast(1.05);
     transform: scale(1.01);
-    transition: opacity 300ms var(--ease-standard), filter 300ms var(--ease-standard);
-    z-index: 1;
 }
 
 body.active #cam {
     opacity: 1;
     filter: grayscale(0) contrast(1);
+}
+
+#camImg {
+    opacity: 0.96;
+    filter: contrast(1.06) brightness(1.02);
+}
+
+.camera-zoom-25x #cam,
+.camera-zoom-25x #camImg,
+#cam.camera-zoom-25x,
+#camImg.camera-zoom-25x {
+    transform: scale(2.5);
+    transform-origin: center 42%;
+}
+
+#visionCanvas {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 4;
+    pointer-events: none;
 }
 
 body::after {
@@ -25,8 +51,8 @@ body::after {
     z-index: 2;
     pointer-events: none;
     background:
-        linear-gradient(180deg, rgba(5, 7, 10, 0.72) 0%, rgba(5, 7, 10, 0.1) 34%, rgba(5, 7, 10, 0.78) 100%),
-        radial-gradient(circle at 50% 48%, rgba(24, 224, 167, 0.12), transparent 42%);
+        linear-gradient(180deg, rgba(5, 7, 10, 0.72) 0%, rgba(5, 7, 10, 0.04) 28%, rgba(5, 7, 10, 0.04) 62%, rgba(5, 7, 10, 0.82) 100%),
+        radial-gradient(circle at 50% 48%, rgba(230, 80, 140, 0.06), transparent 45%);
 }
 
 .app-shell {

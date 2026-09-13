@@ -47,6 +47,17 @@
       aria-label="摄像头画面"
       role="img"
     ></video>
+    <img
+      id="camImg"
+      class="camera-stage-bg"
+      alt="实时取景画面"
+      style="display: none;"
+    />
+    <canvas
+      id="visionCanvas"
+      class="vision-layer"
+      aria-hidden="true"
+    ></canvas>
 
     <main class="app-shell" aria-label="BeautySense 美妆界面">
       <header class="top-app-bar" role="banner">
@@ -302,8 +313,8 @@
               </svg>
             </div>
             <div>
-              <strong>银龄智护</strong>
-              <span>银龄智护管理端</span>
+              <strong>BeautySense</strong>
+              <span>美妆资产与管理端</span>
             </div>
           </div>
           <nav class="care-nav" aria-label="管理端模块">
@@ -476,6 +487,7 @@
     </section>
 
     <script src="static/js/audio.js"></script>
+    <script src="static/js/vision_overlay.js"></script>
     <script type="module" src="static/js/main.js"></script>
   </body>
 </html>

@@ -45,7 +45,7 @@ async function startSystem() {
         STATE.active = true;
         UI.body.classList.add('active');
 
-        showFeedback('银龄智护 已启动');
+        showFeedback('BeautySense 无界美妆伴侣 已就绪');
         updateStatus('连接中...', 'active');
 
         connectWS();
