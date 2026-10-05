@@ -15,7 +15,8 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "SilverCareAiAssistantAndroid"
+rootProject.name = "BeautySense"
 include ":app"
+include ":beautysense"
 include ":mnn_tts"
 project(":mnn_tts").projectDir = file("third_party/mnn/source/MNN/apps/frameworks/mnn_tts/android")
