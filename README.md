@@ -1,273 +1,273 @@
-# BeautySense: Multimodal Wearable & Mobile AI Makeup Companion
+# BeautySense：多模态可穿戴 AI 美妆伙伴
 
 <div align="center">
 
-[![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Wearable-pink.svg)](https://github.com/Karl-XZ/BeautySense)
-[![AI Engine](https://img.shields.io/badge/AI%20Engine-Qwen%20VL%20%7C%20DeepSeek%20%7C%20MNN-blue.svg)](https://github.com/Karl-XZ/BeautySense)
-[![Audio Guidance](https://img.shields.io/badge/Audio-Binaural%20Spatial%20%7C%20Bone%20Conduction-green.svg)](https://github.com/Karl-XZ/BeautySense)
-[![Hardware](https://img.shields.io/badge/Hardware-ESP32--S3%20%7C%20BK7258%20%7C%20OV5640-orange.svg)](https://github.com/Karl-XZ/BeautySense)
-[![License](https://img.shields.io/badge/License-Apache%202.0-lightgrey.svg)](LICENSE)
+[![平台](https://img.shields.io/badge/平台-Android%20%7C%20可穿戴设备-pink.svg)](https://github.com/Karl-XZ/BeautySense)
+[![AI引擎](https://img.shields.io/badge/AI引擎-Qwen%20VL%20%7C%20DeepSeek%20%7C%20MNN-blue.svg)](https://github.com/Karl-XZ/BeautySense)
+[![音频引导](https://img.shields.io/badge/音频引导-立体声空间定位%20%7C%20骨传导-green.svg)](https://github.com/Karl-XZ/BeautySense)
+[![硬件架构](https://img.shields.io/badge/硬件-ESP32--S3%20%7C%20BK7258%20%7C%20OV5640-orange.svg)](https://github.com/Karl-XZ/BeautySense)
+[![开源协议](https://img.shields.io/badge/协议-Apache%202.0-lightgrey.svg)](LICENSE)
 
-**An intelligent, voice-first multimodal assistant that empowers users to independently explore cosmetics, style customized looks, find vanity items through tactile cues, and apply makeup with closed-loop audio guidance and visual verification.**
+**让美的选择与呈现始终掌握在用户自己手中。BeautySense 是一款语音优先、软硬一体的多模态 AI 美妆伙伴，支持自主妆容搭配、AI 妆后预览、基于物理参照的触觉找物、单动作语音分步指导与闭环妆效复核。**
 
-[Core Capabilities](#core-capabilities) • [Demonstration Gallery](#demonstration-gallery) • [System Architecture](#system-architecture) • [Hardware Specification](#v1-wearable-hardware-specification) • [Getting Started](#getting-started) • [Safety & Privacy](#safety-privacy--user-agency)
+[核心能力](#核心能力) • [实机演示](#实机演示) • [系统架构](#系统架构) • [硬件规格](#v1-可穿戴硬件方案) • [快速上手](#快速上手) • [安全与隐私边界](#安全隐私与用户自主权)
 
 </div>
 
 ---
 
-## Overview
+## 项目概述
 
-**BeautySense** is a multimodal AI companion designed for the personal vanity table. It combines computer vision, natural conversational intelligence, step-by-step procedural planning, and spatial audio guidance to assist individuals through every phase of daily grooming.
+**BeautySense** 是一位能看、能听、能对话的智能美妆伙伴，专注于解决日常梳妆台前“手边有什么、下一步怎么做、刚才那一步画得怎么样”的核心需求。
 
-Applying cosmetics demands continuous visual focus, fine manual dexterity, and spatial awareness. For individuals with low vision, visually impaired users, or near-sighted individuals who must remove corrective lenses in front of a mirror, identifying products, measuring dosage, locating application zones, and evaluating makeup results present substantial practical challenges. BeautySense bridges this gap by transforming complex visual tasks into clear, conversational, and hands-free audible steps.
+化妆过程持续占用双手与视线。针对视力受限群体、摘镜化妆的近视人群，辨认化妆品、控制用量、找准面部位置与确认妆效存在诸多现实阻碍。BeautySense 将视觉理解、自然对话、分步动作规划与闭环质检融合于统一任务流中，把复杂的视觉识别转化为清晰可执行的语音指引，全程陪伴用户完成日常妆容。
 
-The system supports two complementary form factors:
-- **Android Mobile Application**: Uses smartphone cameras, microphone arrays, and spatial audio to deliver full-cycle consultation, personalized look creation, real-time makeup preview, and guided execution.
-- **Wearable Headset Prototype**: Features a lightweight first-person camera, bone-conduction transducers, digital microphone, 6-axis IMU, and bilateral haptic actuators, enabling natural hands-free vanity operation.
+系统提供两种互补的产品形态：
+- **Android 移动应用**：结合手机摄像头、麦克风、扬声器与姿态传感器，支持全流程语音咨询、个性化妆造搭配、AI 妆后预览、皮肤状态记录、单动作指导与妆效复核。挂颈使用时可提供近似第一视角的连续观察。
+- **头戴式硬件样机**：集成前向摄像头、双侧骨传导扬声器、数字麦克风阵列、六轴惯性传感器（IMU）与双侧线性触觉单元，实现真正解放双手的沉浸式第一视角美妆辅助。
 
 ```mermaid
 flowchart LR
-    A["Voice Consultation<br/>(Occasion & Needs)"] --> B["Scene & Skin Analysis<br/>(Tabletop & Face)"]
-    B --> C["Look Customization<br/>(Style & Color Tuning)"]
-    C --> D["AI Visual Preview<br/>(Photorealistic Simulation)"]
-    D --> E["SOP Plan Generation<br/>(Sequential Steps)"]
-    E --> F["Tactile Finding & Step Guidance<br/>(Spatial Audio Directions)"]
-    F --> G["Closed-Loop Inspection<br/>(Organ Cropping & Review)"]
+    A["语音问询与需求分析<br/>（场合与妆效偏好）"] --> B["场景扫描与肤况感知<br/>（梳妆台用品与面部状态）"]
+    B --> C["妆造搭配与细节调配<br/>（风格选择与颜色质感）"]
+    C --> D["AI 妆后效果预览<br/>（真实面部效果生成）"]
+    D --> E["结构化 SOP 方案生成<br/>（分步动作与时间规划）"]
+    E --> F["触觉找物与分步引导<br/>（空间音频与动作播报）"]
+    F --> G["闭环视觉复核与微调<br/>（局部器官裁切与质检）"]
 ```
 
 ---
 
-## Key Scenarios
+## 主要服务场景
 
-- **Independent Accessibility Grooming**: Enables low-vision and visually impaired users to independently locate cosmetic items, measure application quantities, and apply makeup through verbal descriptions calibrated against physical landmarks (table edges, hands, container contours).
-- **Corrective-Lens-Free Makeup**: Guides near-sighted users who remove glasses at the vanity mirror, offering clear verbal step-by-step instructions and high-resolution zoomed inspection.
-- **Occasion-Driven Look Styling**: Rapidly devises matched cosmetic plans for professional presentations, roadshows, interviews, and evening events based on user preferences and existing tabletop items.
-- **Senior-Friendly Interaction**: Features concise phrasing, adjustable speech pacing, full verbal replay, and single-action instructions that remove interface complexity.
-
----
-
-## Core Capabilities
-
-### 1. Natural Voice Consultation & Event Adaptation
-Users state their destination and stylistic intent in natural language. The conversational agent assesses context, ambient lighting, and outfit to propose customized makeup directions, answering questions about skin prep and cosmetics selection.
-
-### 2. Multi-Style Vanity Studio & AI Look Preview
-The studio interface integrates a live mirror camera view and cosmetic item detection. Users flexibly select aesthetic genres (Natural, Commute, French Chic, K-Beauty Dewy, Vintage), foundation formulations (Liquid, Cushion, Powder, Tone-up), finishes (Matte, Satin, Dewy), and fine-tuned organ shades (lip tint, blush, eye palette, custom HEX values). The system synthesizes a realistic virtual preview directly onto the user's face prior to application.
-
-### 3. Tactile Reference-Based Object Finding
-For users operating without visual feedback, BeautySense articulates item positions relative to physical body anchors and table boundaries. Spatial audio and verbal instructions guide hands along the table edge to identify containers by geometry (square pump, cylindrical tube, compact case) before confirming products through tactile verification.
-
-### 4. Dynamic Step-by-Step SOP Generation
-Makeup plans are structured into atomic, sequentially verifiable steps. Each step details the specific cosmetic item, dosage recommendation (e.g., "a pea-sized drop"), facial placement zones, application stroke techniques, and estimated duration.
-
-### 5. Closed-Loop Visual Inspection & Quality Review
-After each step, the multimodal vision engine crops facial organs (eyes, cheeks, lips, nose) and compares current progress against the pre-makeup baseline. The agent reports completion status, notes subtle blending opportunities, and detects pigment boundary overflow, while keeping all final styling decisions in the user's control.
-
-### 6. Posture Perception & Fall Risk Safeguards
-An integrated 6-axis IMU monitors sudden posture changes or disorientation during grooming sessions. When irregular acceleration is detected, the assistant immediately pauses makeup guidance to check on the user's physical well-being.
+- **视力障碍与低视力自主梳妆**：默认全流程无需目视界面，通过身体、手掌、桌沿及用品几何形状（圆柱瓶、方瓶、泵头）建立触觉坐标系，指引双手准确拿取产品并完成上妆。
+- **近视摘镜化妆指引**：服务于在梳妆镜前摘下眼镜的用户，提供清晰口播操作与 2.5 倍局部特写放大，协助把控眼周、唇线与腮红细节。
+- **日常场合快速妆造搭配**：面向路演、职场通勤、聚会等特定场景，根据着装、肤质与手边现有化妆品快速定制方案，避免盲目尝试。
+- **银龄友好极简交互**：采用单句慢速播报、单动作逐项确认与完整重读机制，减轻复杂界面的认知负担。
 
 ---
 
-## Demonstration Gallery
+## 核心能力
 
-All screenshots below are captured from the authentic BeautySense application running on Android:
+### 1. 自然语音咨询与场合适配
+用户通过日常口语表达出行需求与风格意向（例如“今天要参加路演，想精神一点，别太浓”）。系统综合考量环境光线、面部基础与着装风格，提供针对性的妆容方向与护肤准备建议。
 
-### Intelligent Consultation & Look Customization
+### 2. 妆造自由搭配与 AI 妆后预览
+在妆造工作室中，用户可自由选择风格类别（自然、通勤、法式、韩系、复古）、底妆类型（粉底液、气垫、粉饼、素颜霜）、质感（哑光、自然、水光）与遮盖度。系统支持五官细分调色（眼妆、腮红、唇釉色号与十六进制自定义颜色），并在动笔前生成贴合用户真实面部轮廓的高保真妆后预览。
 
-| Home Dashboard | Voice Consultation | Makeup Styling Studio |
-| :---: | :---: | :---: |
-| <img src="docs/images/01_home_dashboard.png" width="260" alt="Home Dashboard" /> | <img src="docs/images/02_voice_consultation.png" width="260" alt="Voice Consultation" /> | <img src="docs/images/03_makeup_studio_styling.png" width="260" alt="Makeup Studio Styling" /> |
-| *Device status, quick tools (Skin, Styling, Logs), and proactive voice greeting.* | *Contextual dialogue: "Attending a roadshow today, what makeup suits me?"* | *Real-time dual vanity view with detected cosmetics and style selectors.* |
+### 3. 基于物理参照系的触觉找物
+针对视力受限场景，系统将找物指引规范为五个核心要素：使用哪只手、起点位置、移动方向、触碰形状、何时停止。以桌沿、掌心、瓶身轮廓为物理基准，辅以立体声空间音频提示，结合用户触摸反馈双重确认目标产品。
 
-| Cosmetic Palette Tuning | AI Look Preview | Structured SOP Plan |
-| :---: | :---: | :---: |
-| <img src="docs/images/04_custom_cosmetics_palette.png" width="260" alt="Cosmetic Palette Tuning" /> | <img src="docs/images/05_ai_makeup_preview.png" width="260" alt="AI Look Preview" /> | <img src="docs/images/06_makeup_sop_plan.png" width="260" alt="Structured SOP Plan" /> |
-| *Precise lip tint shades, textures (Dewy, Satin, Matte), and HEX color control.* | *AI-synthesized makeup preview applied to facial geometry prior to application.* | *Structured breakdown: "Korean Dewy Fresh Look" (4 steps, ~14 minutes).* |
+### 4. 动态分步 SOP 生成与单动作引导
+确定方案后，系统将化妆流程拆解为细粒度、按顺序执行的原子步骤（标明用品名称、取用剂量如“黄豆大小”、点涂分布与涂抹手法）。语音每次仅播报当前动作，支持随时打断、暂停、重听或跳过。
+
+### 5. 闭环视觉复核与智能质检
+单步完成后，多模态视觉引擎（Qwen VL Plus / DAMO-YOLO 与 FaceOrganCropper）对比妆前基线与当前状态，准确识别完成情况，提示轻微修整点（如鼻翼轻拍、唇角匀色），检测色彩边界溢出，并在证据不足时主动提示用户轻微转头配合采集，所有调整决定权均保留给用户。
+
+### 6. 姿态感知与跌倒安全保障
+设备集成六轴惯性传感器监测运动姿态。当检测到身体异常晃动或疑似跌倒时，系统即刻暂停化妆指引，优先进行安全询问，确认无恙后恢复原步骤。
 
 ---
 
-### Step Execution, Quality Inspection & Accessibility
+## 实机演示
 
-| Step 1 Guidance & Execution | Visual Inspection Review | Step 2 Eye Makeup |
+以下截图全部来源于 BeautySense 在 Android 真实环境下的运行实录：
+
+### 智能咨询与个性化妆造搭配
+
+| 主页控制台 | 语音咨询与场合建议 | 妆造工作室 |
 | :---: | :---: | :---: |
-| <img src="docs/images/07_step_guidance_execution.png" width="260" alt="Step 1 Guidance & Execution" /> | <img src="docs/images/08_visual_inspection_feedback.png" width="260" alt="Visual Inspection Review" /> | <img src="docs/images/09_step2_eye_makeup.png" width="260" alt="Step 2 Eye Makeup" /> |
-| *Step 1 Dewy Foundation: dosage ("pea-sized drop") and tapping instructions.* | *Multimodal feedback: "Even foundation coverage; tap lightly near left nostril."* | *Progresses to Step 2 Warm Brown Eyeshadow with brush stroke guidance.* |
+| <img src="docs/images/01_home_dashboard.png" width="260" alt="主页控制台" /> | <img src="docs/images/02_voice_consultation.png" width="260" alt="语音咨询与场合建议" /> | <img src="docs/images/03_makeup_studio_styling.png" width="260" alt="妆造工作室" /> |
+| *设备状态、安全感知、皮肤状态/妆造搭配/实时日志入口与智能语音问候。* | *“今天要参加路演，帮我看看适合什么妆？”对话响应与妆容推荐。* | *实时双视角画面：梳妆镜面部反射与桌面化妆品摆放。* |
 
-| Tactile Reference Object Finding | Dual Interaction Modes & Peripherals |
+| 彩妆色彩精细调配 | AI 妆后效果预览 | 结构化 SOP 方案总览 |
+| :---: | :---: | :---: |
+| <img src="docs/images/04_custom_cosmetics_palette.png" width="260" alt="彩妆色彩精细调配" /> | <img src="docs/images/05_ai_makeup_preview.png" width="260" alt="AI 妆后效果预览" /> | <img src="docs/images/06_makeup_sop_plan.png" width="260" alt="结构化 SOP 方案总览" /> |
+| *唇釉色系（豆沙/珊瑚/正红等）、质感选择与十六进制颜色自定义。* | *动笔前在用户真实面部几何上生成合成妆效预览。* | *“韩系清亮妆”结构化分解（共 4 步 · 约 14 分钟）。* |
+
+---
+
+### 分步执行、视觉复核与无障碍交互
+
+| 第一步底妆指引与执行 | 妆效视觉复核与修整反馈 | 第二步眼影进阶指引 |
+| :---: | :---: | :---: |
+| <img src="docs/images/07_step_guidance_execution.png" width="260" alt="第一步底妆指引与执行" /> | <img src="docs/images/08_visual_inspection_feedback.png" width="260" alt="妆效视觉复核与修整反馈" /> | <img src="docs/images/09_step2_eye_makeup.png" width="260" alt="第二步眼影进阶指引" /> |
+| *取黄豆大小点拍手法指导、用品高亮与“完成并检查”入口。* | *多模态复核反馈：“底妆整体自然，左边鼻翼附近可轻拍修整”。* | *步骤推进至暖棕眼影打底，细化闭眼轻扫手法与停留位置。* |
+
+| 触觉参照物定位找物 | 交互模式切换与外设遥测 |
 | :---: | :---: |
-| <img src="docs/images/10_accessibility_tactile_finding.png" width="260" alt="Tactile Reference Object Finding" /> | <img src="docs/images/11_accessibility_mode_status.png" width="260" alt="Dual Interaction Modes" /> |
-| *Voice guide: "Left hand finds the left table edge, slide right until touching a cylinder..."* | *Mode toggle (Enhanced / Accessibility) and live peripheral telemetry.* |
+| <img src="docs/images/10_accessibility_tactile_finding.png" width="260" alt="触觉参照物定位找物" /> | <img src="docs/images/11_accessibility_mode_status.png" width="260" alt="交互模式切换与外设遥测" /> |
+| *语音引导：“左手摸梳妆台左侧桌沿，向右移动碰到圆柱瓶身即停，口红在右侧一掌处”。* | *普通增强与无障碍辅助双模式切换，后置相机/语音/安全感知运行遥测。* |
 
 ---
 
-## System Architecture
+## 系统架构
 
 ```text
 +-----------------------------------------------------------------------------------+
-|                            User Interaction Surface                               |
-|   Hands-free Voice Dialogue   |   Spatial Audio Beacons   |   Touch / Mobile UI   |
+|                                  用户交互界面                                     |
+|     免手持语音对话      |      立体声空间音频指引      |      触控 / 移动端 UI     |
 +-----------------------------------------------------------------------------------+
                                          |
                                          v
 +-----------------------------------------------------------------------------------+
-|                             Android Application Layer                             |
+|                                 Android 应用运行层                                |
 |  +-------------------------------------+  +------------------------------------+  |
-|  |           WebView Frontend          |  |       Native Android Bridge        |  |
-|  | - Single Page Application Shell     |  | - MainActivity.SilverCareBridge    |  |
-|  | - Web Audio Binaural Spatial Engine |  | - CameraX High-Res Frame Capture   |  |
-|  | - Dynamic Color & Style Selectors   |  | - AudioRecord PCM Stream Provider  |  |
-|  | - High-Contrast Accessibility UI    |  | - System TTS & Sherpa-ONNX Fallback|  |
+|  |           WebView 前端界面          |  |          Android 原生桥接层        |  |
+|  | - 单页应用架构与自适应布局          |  | - MainActivity.SilverCareBridge    |  |
+|  | - Web Audio 双耳空间音频定位引擎    |  | - CameraX 高清视频流帧捕获         |  |
+|  | - 妆造风格与色号调配面板            |  | - AudioRecord PCM 音频流采集       |  |
+|  | - 高对比度无障碍交互模式            |  | - 系统 TTS 与 Sherpa-ONNX 兜底     |  |
 |  +-------------------------------------+  +------------------------------------+  |
 +-----------------------------------------------------------------------------------+
                                          |
                                          v
 +-----------------------------------------------------------------------------------+
-|                        Multimodal Intelligence Engine                             |
+|                                多模态智能推理引擎                                 |
 |  +-------------------------+ +-------------------------+ +---------------------+  |
-|  |   Conversational Agent  | |   Table Scene Analyzer  | | Face Organ Analyzer |  |
-|  |   (DeepSeek / Qwen)     | |    (Qwen VL Flash)      | | (FaceOrganCropper)  |  |
-|  | - Intent Understanding  | | - Cosmetic Item BBoxes  | | - 5-Organ Partition |  |
-|  | - Dialogue State Track  | | - Shape & Anchor Logic  | | - Symmetry & Bounds |  |
+|  |      自然对话 Agent     | |     桌面场景视觉分析    | |     面部器官定位    |  |
+|  |    (DeepSeek / Qwen)    | |     (Qwen VL Flash)     | |  (FaceOrganCropper) |  |
+|  | - 意图理解与上下文管理  | | - 桌面化妆品定位与识别  | | - 五官区域定位分割  |  |
+|  | - 任务状态机推进        | | - 几何轮廓与物理参照推算| | - 对称度与溢出量化  |  |
 |  +-------------------------+ +-------------------------+ +---------------------+  |
 |                                                                                   |
 |  +-------------------------+ +-------------------------+ +---------------------+  |
-|  |  Structured SOP Planner | |   Visual Inspection LLM | |  Local Edge Models  |  |
-|  |      (Qwen Plus)        | |     (Qwen VL Plus)      | |  (MNN Runtime)      |  |
-|  | - Granular Task Steps   | | - Pre/Post Comparison   | | - DAMO-YOLO Vision  |  |
-|  | - Dosage & Zone Prompts | | - Minimal Correction    | | - SenseVoice ASR    |  |
+|  |    结构化 SOP 规划器    | |    妆效视觉复核质检     | |     端侧轻量模型    |  |
+|  |       (Qwen Plus)       | |     (Qwen VL Plus)      | |     (MNN Runtime)   |  |
+|  | - 动作原子化步骤分解    | | - 妆前妆后精细对比      | | - DAMO-YOLO 目标检测|  |
+|  | - 取量/手法/分区参数提示| | - 最小幅度修整建议生成  | | - SenseVoice 离线ASR|  |
 |  +-------------------------+ +-------------------------+ +---------------------+  |
 +-----------------------------------------------------------------------------------+
                                          |
                                          v
 +-----------------------------------------------------------------------------------+
-|                      V1 Wearable Hardware Subsystem                               |
-|  - Camera: OV5640 5MP (Vanity First-Person Field of View)                         |
-|  - Motion: BMI270 6-Axis IMU (Head Orientation & Sudden Drop Detection)           |
-|  - Audio Input: ICS-43434 High-SNR Digital Microphone                             |
-|  - Audio Output: MAX98357A I2S Class-D Amp + Dual 8-Ohm Bone Conduction           |
-|  - Haptic Feedback: PCA9540B I2C MUX + Dual DRV2605L + 0809 LRA Actuators         |
-|  - Power & Comms: 1S LiPo + Magnetic 4-Pin Interface + Wi-Fi / BLE               |
+|                               V1 可穿戴硬件子系统                                 |
+|  - 视觉采集：OV5640 500 万像素摄像头（第一人称视角）                             |
+|  - 运动感知：BMI270 六轴 IMU（头部姿态跟踪与异常跌倒感知）                        |
+|  - 语音输入：ICS-43434 高信噪比数字麦克风（免手持拾音与降噪）                     |
+|  - 音频输出：MAX98357A I2S 功放 + 双侧 8Ω 骨传导单元（开放双耳安全播报）          |
+|  - 触觉反馈：PCA9540B I2C 多路复用 + 双 DRV2605L + 0809 LRA 线性马达（双侧触觉）  |
+|  - 供电通信：1S 锂电池 + 4Pin 磁吸接口 + Wi-Fi / 低功耗蓝牙                       |
 +-----------------------------------------------------------------------------------+
 ```
 
 ---
 
-## V1 Wearable Hardware Specification
+## V1 可穿戴硬件方案
 
-The wearable headset is designed to capture a natural first-person perspective of the vanity mirror and tabletop while leaving both hands completely unobstructed.
+头戴硬件样机专注于第一人称梳妆台视野采集，耳道完全开放，双手彻底释放。
 
-### Core Component Baseline
+### 核心器件选型清单
 
-| Component | Part / Spec | Quantity | Interface | Primary Function |
+| 元器件 | 型号 / 规格 | 数量 | 接口协议 | 核心功能 |
 | :--- | :--- | :---: | :--- | :--- |
-| **Camera Module** | Omnivision OV5640 (5MP) | 1 | DVP / MIPI | First-person video capture of cosmetics and facial reflection |
-| **Motion Sensor** | Bosch BMI270 (6-Axis IMU) | 1 | I2C (`0x68`) | Head orientation tracking, tremor detection, fall protection |
-| **Microphone** | InvenSense ICS-43434 | 1 | I2S | High-SNR voice command capture with ambient noise rejection |
-| **Audio Amplifier**| Maxim MAX98357A | 1 | I2S | Direct digital-to-analog audio amplification |
-| **Bone Conduction**| 8Ω Transducers (Parallel Mono) | 2 | Speaker Out | Open-ear audio guidance without blocking surrounding sounds |
-| **Haptic Mux** | TI PCA9540B | 1 | I2C (`0x70`) | Dual-channel address isolation for identical haptic drivers |
-| **Haptic Drivers** | TI DRV2605L | 2 | I2C (`0x5A`) | Independent left and right directional tactile pulses |
-| **Haptic Motors** | 0809 Linear Resonant Actuator (LRA) | 2 | Diff Drive | Crisp directional arrival and alignment cues |
-| **Power Supply** | Single-Cell 1S LiPo Battery | 1 | 3.7V - 4.2V | Lightweight wearable power system |
-| **Charging & Data**| 4-Pin Magnetic Connector | 1 | USB / 5V | Convenient magnetic charging and firmware flashing |
+| **摄像头模块** | Omnivision OV5640（500万像素） | 1 | DVP / MIPI | 第一人称采集桌面化妆品布局与面部镜面反射 |
+| **惯性传感器** | Bosch BMI270（六轴 IMU） | 1 | I2C (`0x68`) | 头部朝向、异常晃动与跌倒安全感知 |
+| **数字麦克风** | InvenSense ICS-43434 | 1 | I2S | 免手持语音指令拾音与环境降噪 |
+| **音频功放** | Maxim MAX98357A | 1 | I2S | 高能效数字音频功率放大 |
+| **骨传导单元** | 8Ω 骨传导震子（并联单声道） | 2 | Speaker Out | 开放双耳的语音操作指引播报 |
+| **触觉复用器** | TI PCA9540B | 1 | I2C (`0x70`) | 隔离双路相同 I2C 地址的触觉驱动芯片 |
+| **触觉驱动器** | TI DRV2605L | 2 | I2C (`0x5A`) | 左右独立控制的高精度触觉波形驱动 |
+| **线性马达** | 0809 LRA 线性谐振执行器 | 2 | 差分驱动 | 左右两侧方向指引与对齐到达脉冲提示 |
+| **可充电电池** | 单节 1S 锂聚合物电池 | 1 | 3.7V - 4.2V | 轻量化随身供电 |
+| **磁吸接口** | 4-Pin 磁吸连接器 | 1 | 5V / GND / USB | 便捷磁吸供电充电与固件下载 |
 
-### Hardware Controller Configurations
+### 主控方案评估
 
-The system supports two complementary controller architectures:
-- **Plan A (ESP32-S3-MINI-1U-N4R2)**: Dual-core Xtensa LX7 running at 240 MHz, integrated Wi-Fi and Bluetooth 5 LE, hardware cryptographic acceleration, and direct support for camera/audio peripherals.
-- **Plan B (BK7258QN88616)**: Dual-core Star-MC1 architecture with 8MB PSRAM and 16MB Flash, optimized for ultra-low-power multimedia streaming.
+硬件支持两套主控基准并行验证：
+- **方案 A（ESP32-S3-MINI-1U-N4R2）**：双核 Xtensa LX7，240 MHz 主频，原生集成 Wi-Fi 与蓝牙 5 LE，外设接口丰富，开发生态成熟。
+- **方案 B（BK7258QN88616）**：双核 Star-MC1 架构，内置 8MB PSRAM 与 16MB Flash，专为音视频流媒体设计的超低功耗多媒体芯片。
 
-Complete schematics, BOM lists, signal nets, and power tree designs reside under [`docs/hardware/integration/v1/`](docs/hardware/integration/v1/).
+完整原理图设计规范、BOM 清单、信号网络与引脚分配矩阵详见 [`docs/hardware/integration/v1/`](docs/hardware/integration/v1/)。
 
 ---
 
-## Software Project Structure
+## 软件工程目录结构
 
 ```text
 BeautySense/
-├── app/                                    # Android application source code
+├── app/                                    # Android 客户端源码
 │   ├── src/main/
-│   │   ├── assets/                         # Web frontend assets & edge models
-│   │   │   ├── index.html                  # Main SPA interface shell
-│   │   │   ├── offline/                    # Bundled offline MNN models (DAMO-YOLO)
+│   │   ├── assets/                         # WebView 前端资产与端侧模型
+│   │   │   ├── index.html                  # 单页应用主结构
+│   │   │   ├── offline/                    # 端侧轻量化 MNN 模型（DAMO-YOLO）
 │   │   │   └── static/
-│   │   │       ├── css/                    # Stylesheets (layout, animations, components)
-│   │   │       ├── js/                     # Modular frontend logic
-│   │   │       │   ├── audio.js            # Web Audio binaural spatial positioning
-│   │   │       │   ├── input.js            # Voice, touch, and sensor event routing
-│   │   │       │   ├── network.js          # REST / WebSocket communication bridge
-│   │   │       │   └── ui.js               # UI controller and visual state rendering
-│   │   │       └── images/                 # App icon and graphical assets
-│   │   ├── cpp/                            # Native MNN runtime bridge and C++ wrappers
-│   │   ├── java/com/silvercare/aiassistant/# Core business logic & Android bridges
-│   │   │   ├── MainActivity.java           # Android activity, WebView setup, bridges
-│   │   │   ├── FaceOrganCropper.java       # 5-organ facial region segmentation
-│   │   │   ├── MemoryStore.java            # Cosmetic inventory and spatial memory store
-│   │   │   └── SilverCareProcessor.java    # Multimodal orchestration and SOP state machine
-│   │   └── res/                            # Native Android resources, layouts, strings
-│   └── build.gradle                        # App-level Gradle build configuration
-├── docs/                                   # Architectural documentation & assets
-│   ├── images/                             # Real demonstration screenshots
-│   ├── functional-architecture-zh.md       # Comprehensive functional architecture
-│   ├── diagnostic-logging-zh.md            # Logging and diagnostic specifications
-│   └── hardware/integration/v1/            # Wearable hardware schematics, BOM, pin matrix
-├── hardware/                               # Hardware prototyping and bench tests
-└── test_images/                            # Standard test images for verification
+│   │   │       ├── css/                    # 界面样式表（布局、动画、组件）
+│   │   │       ├── js/                     # 模块化前端脚本
+│   │   │       │   ├── audio.js            # Web Audio 双耳空间声像渲染
+│   │   │       │   ├── input.js            # 语音、触控与传感器事件分发
+│   │   │       │   ├── network.js          # REST / WebSocket 通信通道
+│   │   │       │   └── ui.js               # 界面状态渲染与交互响应
+│   │   │       └── images/                 # 图标与图形资产
+│   │   ├── cpp/                            # MNN 底层推理 C++ JNI 桥接
+│   │   ├── java/com/silvercare/aiassistant/# Android 核心业务逻辑与原生桥
+│   │   │   ├── MainActivity.java           # 主 Activity、WebView 设置与 Native 桥接
+│   │   │   ├── FaceOrganCropper.java       # 面部五官器官定位与区域裁剪
+│   │   │   ├── MemoryStore.java            # 化妆品长期记忆与位置存储
+│   │   │   └── SilverCareProcessor.java    # 多模态业务编排与 SOP 状态机推进
+│   │   └── res/                            # Android 原生资源、布局与字符串
+│   └── build.gradle                        # 应用级 Gradle 构建配置
+├── docs/                                   # 项目架构文档与多媒体资源
+│   ├── images/                             # 演示视频提取的高清实机截图
+│   ├── functional-architecture-zh.md       # 详细功能架构与测试规范
+│   ├── diagnostic-logging-zh.md            # 诊断日志与调试规范
+│   └── hardware/integration/v1/            # 可穿戴硬件原理图、BOM 与引脚矩阵
+├── hardware/                               # 硬件开发与单模块调试记录
+└── test_images/                            # 标准化测试图片集
 ```
 
 ---
 
-## Getting Started
+## 快速上手
 
-### Prerequisites
+### 环境要求
 
-- **Android Studio**: Iguana (2023.2.1) or newer
-- **Android SDK**: API Level 34 (Android 14) minimum, target API Level 35
-- **JDK**: Java Development Kit 17 (recommended: Eclipse Temurin or Android Studio bundled JDK)
-- **Node.js**: v18.0+ (required for frontend test runners)
+- **Android Studio**：Iguana (2023.2.1) 或更高版本
+- **Android SDK**：最低支持 API Level 34 (Android 14)，目标版本 API Level 35
+- **JDK**：Java Development Kit 17（推荐使用 Eclipse Temurin 或 Android Studio 内置 JDK）
+- **Node.js**：v18.0+（运行前端单元测试所需）
 
-### Setup & Compilation
+### 构建与安装
 
-1. **Clone the Repository**:
+1. **克隆代码仓库**：
    ```bash
    git clone https://github.com/Karl-XZ/BeautySense.git
    cd BeautySense
    ```
 
-2. **Configure Cloud API Keys (Optional)**:
-   Create a `local.properties` file in the project root to enable cloud multimodal processing (this file is excluded by `.gitignore`):
+2. **配置云端模型密钥（可选）**：
+   在工程根目录下创建 `local.properties` 文件（该文件已被 `.gitignore` 自动忽略）：
    ```properties
    DASHSCOPE_API_KEY=your_dashscope_api_key_here
    ```
 
-3. **Build the Android Application**:
+3. **编译 Debug APK**：
    ```powershell
-   # On Windows PowerShell
+   # Windows PowerShell 环境
    .\gradlew.bat :app:assembleDebug --no-daemon
    ```
 
-4. **Run Unit Tests**:
+4. **运行单元测试**：
    ```powershell
    .\gradlew.bat :app:testDebugUnitTest --no-daemon
    ```
 
-5. **Deploy to Device or Emulator**:
+5. **安装到真机或模拟器**：
    ```powershell
    adb install -r app/build/outputs/apk/debug/app-debug.apk
    ```
 
 ---
 
-## Safety, Privacy & User Agency
+## 安全隐私与用户自主权
 
-- **User-Centric Control**: The assistant provides non-prescriptive, objective observations. Every styling adjustment, shade substitution, and micro-correction remains an explicit choice of the user.
-- **Physical Safety Safeguards**: The 6-axis IMU actively detects sudden head drops or erratic movement. If potential distress is sensed, the assistant suspends cosmetic procedures immediately and requests confirmation of well-being.
-- **Strict Privacy Boundaries**: Facial images and camera feeds are evaluated strictly in transient memory buffers for real-time inference. Facial images and skin metrics are persisted to long-term storage only upon explicit user consent, and users can delete their recorded history at any time.
-- **Secure Credential Storage**: Cloud model credentials reside entirely on private endpoints and local developer configuration files, ensuring no secret leakage into public version control.
+- **用户掌控决策权**：系统提供客观的观察描述与指导建议，所有妆容更换、用量增减和微调动作均由用户自主选择。
+- **运动安全守护机制**：六轴 IMU 实时感知佩戴者头部剧烈变动或异常跌倒。触发风险阈值时立即暂停妆造流程，先核实人身安全。
+- **面部隐私安全红线**：相机画面默认仅在当前动作分析时以瞬时内存形式送入推理通道。只有经用户明确同意，处理后的面部特征记录才持久化存入设备，且随时支持一键清除。
+- **端侧与云端鉴权隔离**：模型调用凭证保留于服务端和本地安全配置文件中，杜绝密钥泄露风险。
 
 ---
 
-## License
+## 开源协议
 
-This project is licensed under the Apache License 2.0. Third-party runtime dependencies (MNN, Sherpa-ONNX, Vosk, DashScope Client) are governed by their respective open-source licenses and terms of service.
+本项目采用 Apache 2.0 开源协议发布。第三方依赖（MNN、Sherpa-ONNX、Vosk、DashScope SDK 等）请遵守各自的开源许可协议及服务条款。
