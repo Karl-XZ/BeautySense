@@ -7,8 +7,8 @@ local.properties
 captures/
 *.iml
 
-app/build/
-app/.cxx/
+beautysense/build/
+beautysense/.cxx/
 **/.cxx/
 *.apk
 *.aab
@@ -27,8 +27,3 @@ tmp/
 *.jks
 *.p12
 *.pem
-
-test_runs/models/
-test_runs/fine_tune/
-test_runs/submission_readiness/
-

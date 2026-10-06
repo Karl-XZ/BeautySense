@@ -1,4 +1,4 @@
-name: Android Tests
+name: BeautySense Android
 
 on:
   pull_request:
@@ -6,36 +6,23 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  android:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
       - uses: android-actions/setup-android@v3
-
-      - name: Install Android native toolchain
-        run: sdkmanager "cmake;3.22.1" "ndk;27.2.12479018"
-
+      - name: Install Android SDK
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
-
-      - name: JS syntax and unit tests
-        run: |
-          npm run check:js
-          npm run test:js
-
-      - name: Android JVM unit tests
-        run: ./gradlew testDebugUnitTest --no-daemon
-
-      - name: Build debug APK
-        run: ./gradlew assembleDebug --no-daemon
+      - name: Android unit tests and build
+        run: ./gradlew :beautysense:testDebugUnitTest :beautysense:assembleDebug --no-daemon
+      - name: Upload test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: BeautySense-debug
+          path: beautysense/build/outputs/apk/debug/beautysense-debug.apk
