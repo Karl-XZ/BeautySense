@@ -1,0 +1,30 @@
+name: BeautySense Android
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Install Android SDK
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+      - name: Android unit tests and build
+        run: ./gradlew :beautysense:testDebugUnitTest :beautysense:assembleDebug --no-daemon
+      - name: Upload test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: BeautySense-debug
+          path: beautysense/build/outputs/apk/debug/beautysense-debug.apk
