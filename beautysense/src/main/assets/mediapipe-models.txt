@@ -1,0 +1,7 @@
+Official Google MediaPipe model bundles; retrieved 2026-11-08.
+FaceLandmarker (478 landmarks): https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task
+SHA256: 64184E229B263107BC2B804C6625DB1341FF2BB731874B0BCC2FE6544E0BC9FF
+HandLandmarker: https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task
+SHA256: FBC2A30080C3C557093B5DDFC334698132EB341044CCEE322CCF8BCF3607CDE1
+Android dependency: com.google.mediapipe:tasks-vision:0.10.21
+Runtime policy: any detected hand suppresses the entire makeup texture conservatively.
