@@ -107,7 +107,8 @@ private val Rose=Color(0xff865364)
 internal fun productDetail(u:MirrorUi,p:JSONObject):String {
  val id=p.optString("id")
  val reason=(0 until u.recommendations.length()).mapNotNull {u.recommendations.optJSONObject(it)}.firstOrNull {it.optString("productId")==id}?.optString("reason").orEmpty()
- return listOf(p.optString("name"),reason,p.optString("description"),p.opt("ingredients")?.takeIf {it!=JSONObject.NULL}?.let {"成分：${MirrorPresentation.report(it)}"}.orEmpty(),p.optString("usage"),p.optString("source"),p.optString("sourceUrl"),p.optString("officialUrl")).filter {it.isNotBlank()}.joinToString("\n\n")
+ val ingredients=MirrorPresentation.report(p.opt("ingredients")).trim().ifBlank {p.optString("ingredientsNote").trim()}
+ return listOf(p.optString("name"),reason,p.optString("description"),ingredients.takeIf {it.isNotBlank()}?.let {"成分：$it"}.orEmpty(),p.optString("usage"),p.optString("source"),p.optString("sourceUrl"),p.optString("officialUrl")).filter {it.isNotBlank()}.joinToString("\n\n")
 }
 
 @Composable private fun ProductThumbnail(path:String) {

@@ -30,6 +30,17 @@ class MirrorPresentationTest {
   val source="https://www.proya.com/product"
   assertTrue(productDetail(MirrorUi(),JSONObject().put("name","官方产品").put("source",source)).contains(source))
  }
+ @Test fun productIngredientsUseCatalogNoteInsteadOfAnEmptyHeading() {
+  val note="完整成分请查看产品包装"
+  for(value in listOf<Any>(JSONArray(),JSONObject.NULL,"")) {
+   val detail=productDetail(MirrorUi(),JSONObject().put("name","官方产品").put("ingredients",value).put("ingredientsNote",note))
+   assertTrue(detail.contains(note))
+   assertFalse(detail.contains("成分：\n"))
+  }
+  val provided=productDetail(MirrorUi(),JSONObject().put("ingredients",JSONArray().put("烟酰胺")).put("ingredientsNote",note))
+  assertTrue(provided.contains("成分：烟酰胺"));assertFalse(provided.contains(note))
+  assertFalse(productDetail(MirrorUi(),JSONObject().put("ingredients",JSONArray())).contains("成分："))
+ }
  @Test fun assistantPreviewLimitsCodepointsWithoutSplittingEmoji() {
   val short="已有完整回复"
   assertEquals(short,MirrorPresentation.assistantPreview(short))
