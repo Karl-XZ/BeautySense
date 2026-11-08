@@ -97,7 +97,7 @@ class MeshView(context:Context):View(context) {
         for(y in 0 until bitmap.height step 16) for(x in 0 until bitmap.width step 16) { val p=bitmap.getPixel(x,y); light+=(Color.red(p)+Color.green(p)+Color.blue(p))/3; count++ }
         val bright=light/count.coerceAtLeast(1)
         val valid=complete && !handsPresent && bright in 35..235 && !discontinuity
-        val hint=when { faces.isEmpty()->"请将面部放入圆框内"; faces.size>1->"请保持仅一人入镜"; handsPresent->"请移开手部遮挡"; !complete->"请调整距离，完整露出面部"; bright<35->"光线偏暗，请调整位置"; bright>235->"光线过强，请调整位置"; else->"请正对镜头，点击确定" }
+        val hint=when { faces.isEmpty()->"请将完整面部放入椭圆内"; faces.size>1->"请保持仅一人入镜"; handsPresent->"请移开手部遮挡"; !complete->"请调整距离，完整露出面部"; bright<35->"光线偏暗，请调整位置"; bright>235->"光线过强，请调整位置"; else->"请正对镜头，点击确定" }
         val f=LiveFrame(bytes,System.currentTimeMillis(),points,bitmap.width,bitmap.height,valid,hint)
         ContextCompat.getMainExecutor(context).execute { if(!disposed.get()) { mesh.frame=f; mesh.invalidate(); latestFrame.value(f) } }
         mp.close(); bitmap.recycle()
