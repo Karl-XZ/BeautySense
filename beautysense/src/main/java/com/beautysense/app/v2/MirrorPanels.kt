@@ -2,7 +2,11 @@ package com.beautysense.app.v2
 
 import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.selection.selectable
@@ -26,7 +30,7 @@ import java.net.URL
 private val Ink=Color(0xff302a2d)
 private val Rose=Color(0xff865364)
 
-@Composable internal fun CompactReport(analysis:JSONObject?,restoreFocus:Boolean=false,restored:()->Unit={},open:()->Unit) {
+@Composable internal fun CompactReport(analysis:JSONObject?,restoreFocus:Boolean=false,restored:()->Unit={},metricReveal:Float=1f,open:()->Unit) {
  val reportFocus=remember {FocusRequester()}
  LaunchedEffect(restoreFocus) {if(restoreFocus) {reportFocus.requestFocus();restored()}}
  Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
@@ -42,19 +46,19 @@ private val Rose=Color(0xff865364)
  val metrics=MirrorPresentation.metrics(analysis?.optJSONObject("skinMetrics"))
  metrics.chunked(2).forEach {pair->Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(14.dp)) {pair.forEach {m->Column(Modifier.weight(1f).padding(vertical=3.dp).testTag("metric-${m.key}")) {
   Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){Text(m.label,fontSize=11.sp,lineHeight=14.sp);Text(if(m.value%1f==0f) m.value.toInt().toString() else m.value.toString(),fontSize=11.sp,lineHeight=14.sp)}
-  Box(Modifier.fillMaxWidth().height(3.dp).background(Color(0xffe6dcda))) {Box(Modifier.fillMaxWidth(m.value/100f).fillMaxHeight().background(Rose))}
+  Box(Modifier.fillMaxWidth().height(3.dp).background(Color(0xffe6dcda))) {Box(Modifier.fillMaxWidth(m.value/100f*metricReveal).fillMaxHeight().background(Rose))}
  }};if(pair.size==1) Spacer(Modifier.weight(1f))}}
 }
 
 @OptIn(ExperimentalFoundationApi::class)
-@Composable internal fun CompactCatalog(u:MirrorUi,model:MirrorViewModel,restoreFocus:String?=null,restored:()->Unit={},open:(JSONObject,Boolean)->Unit) {
+@Composable internal fun CompactCatalog(u:MirrorUi,model:MirrorViewModel,restoreFocus:String?=null,restored:()->Unit={},categoryScroll:ScrollState=rememberScrollState(),productScroll:ScrollState=rememberScrollState(),open:(JSONObject,Boolean)->Unit) {
  val catalog=u.catalog ?: return
  val categories=catalog.optJSONArray("categories") ?: return
  val products=catalog.optJSONArray("products") ?: return
  val visible=(0 until products.length()).mapNotNull {products.optJSONObject(it)}.filter {it.optString("brand")=="PROYA"}
  val groups=(0 until categories.length()).mapNotNull {categories.optJSONObject(it)}.filter {c->visible.any {it.optString("categoryId")==c.optString("id")}}
  val active=u.category ?: groups.firstOrNull()?.optString("id")
- Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+ Row(Modifier.fillMaxWidth().horizontalScroll(categoryScroll),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
   groups.forEach {c->val id=c.optString("id");val selected=active==id
    Box(Modifier.heightIn(min=48.dp).widthIn(min=48.dp).selectable(selected=selected,role=Role.Tab,onClick={model.category(id)}).testTag("category-$id"),contentAlignment=Alignment.Center) {
     Text(c.optString("name"),Modifier.background(if(selected) Ink else Color(0xffeee6e2),RoundedCornerShape(18.dp)).padding(horizontal=14.dp,vertical=9.dp),color=if(selected) Color.White else Ink,fontSize=12.sp)
@@ -62,13 +66,16 @@ private val Rose=Color(0xff865364)
   }
  }
  Spacer(Modifier.height(4.dp))
- Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).testTag("product-rail"),horizontalArrangement=Arrangement.spacedBy(10.dp)) {
+ Row(Modifier.fillMaxWidth().horizontalScroll(productScroll).testTag("product-rail"),horizontalArrangement=Arrangement.spacedBy(10.dp)) {
   visible.filter {it.optString("categoryId")==active}.forEach {p->key(p.optString("id")) {
    val productFocus=remember {FocusRequester()}
    val id=p.optString("id");val category=p.optString("categoryId");val chosen=u.flow.items[category]?.productId==id
+   val interaction=remember {MutableInteractionSource()};val pressed by interaction.collectIsPressedAsState()
+   val tone by animateColorAsState(if(pressed) Color(0xfff1e7e9) else if(chosen) Color(0xfffff7f9) else Color.White,tween(120),label="product press")
+   val outline by animateColorAsState(if(chosen) Rose else Color(0xffe7ddda),tween(160),label="product selection")
    LaunchedEffect(restoreFocus,id) {if(restoreFocus==id) {productFocus.requestFocus();restored()}}
    Box(Modifier.size(width=96.dp,height=102.dp)) {
-    Column(Modifier.fillMaxSize().focusRequester(productFocus).border(if(chosen) 2.dp else 1.dp,if(chosen) Rose else Color(0xffe7ddda),RoundedCornerShape(12.dp)).background(Color.White,RoundedCornerShape(12.dp)).semantics {selected=chosen;contentDescription=p.optString("name");stateDescription=if(chosen) "已选" else "未选"}.combinedClickable(role=Role.Button,onLongClickLabel="查看产品详情",onClick={
+    Column(Modifier.fillMaxSize().focusRequester(productFocus).border(if(chosen) 2.dp else 1.dp,outline,RoundedCornerShape(12.dp)).background(tone,RoundedCornerShape(12.dp)).semantics {selected=chosen;contentDescription=p.optString("name");stateDescription=if(chosen) "已选" else "未选"}.combinedClickable(interactionSource=interaction,indication=LocalIndication.current,role=Role.Button,onLongClickLabel="查看产品详情",onClick={
      val variants=p.optJSONArray("variants")
      if(variants?.length()==1) {if(chosen) model.remove(category) else model.select(Item(category,id,variants.getJSONObject(0).getString("id")))} else open(p,true)
     },onLongClick={open(p,false)}).padding(6.dp).testTag("product-$id"),horizontalAlignment=Alignment.CenterHorizontally) {
@@ -123,7 +130,9 @@ internal fun productDetail(u:MirrorUi,p:JSONObject):String {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable internal fun CompactAction(label:String,enabled:Boolean=true,modifier:Modifier=Modifier,help:()->Unit,click:()->Unit) {
- Box(modifier.background(if(enabled) Rose else Color(0xffcbbfc1),RoundedCornerShape(13.dp)).combinedClickable(role=Role.Button,enabled=enabled,onClick=click,onLongClick=help).padding(horizontal=12.dp),contentAlignment=Alignment.Center) {Text(label,color=Color.White,fontSize=14.sp)}
+ val interaction=remember {MutableInteractionSource()};val pressed by interaction.collectIsPressedAsState()
+ val tone by animateColorAsState(if(!enabled) Color(0xffcbbfc1) else if(pressed) Color(0xff6d4050) else Rose,tween(120),label="action press")
+ Box(modifier.background(tone,RoundedCornerShape(13.dp)).combinedClickable(interactionSource=interaction,indication=LocalIndication.current,role=Role.Button,enabled=enabled,onClick=click,onLongClick=help).padding(horizontal=12.dp),contentAlignment=Alignment.Center) {Text(label,color=Color.White,fontSize=14.sp)}
 }
 
 @OptIn(ExperimentalFoundationApi::class)

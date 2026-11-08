@@ -3,6 +3,8 @@ package com.beautysense.app.v2
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -11,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -39,6 +42,14 @@ private val MirrorRose=Color(0xff865364)
  fun showDetail(title:String,body:String) {if(model.ui.value.flow.epoch==u.flow.epoch) detail=MirrorDetail(u.flow.epoch,title,body)}
  val activeDetail=detail?.takeIf {it.belongsTo(u.flow.epoch) && it.belongsTo(model.ui.value.flow.epoch)}
  var expanded by remember { mutableStateOf(true) }; var chat by remember { mutableStateOf(false) }; var text by remember { mutableStateOf("") }; var resetConfirm by remember { mutableStateOf(false) }
+ val panelScroll=remember(u.flow.epoch,u.flow.stage) {ScrollState(0)}
+ val categoryScroll=remember(u.flow.epoch) {ScrollState(0)};val productScroll=remember(u.flow.epoch) {ScrollState(0)};val chatScroll=remember(u.flow.epoch) {ScrollState(0)}
+ val panelAlpha=remember(u.flow.epoch) {Animatable(1f)}
+ // One incoming layer keeps outgoing private content and the camera out of transitions.
+ LaunchedEffect(u.flow.epoch,u.flow.stage,activeDetail,chat,resetConfirm,u.confirmReanalysis,expanded) {panelAlpha.snapTo(.78f);panelAlpha.animateTo(1f,tween(180))}
+ val metricReveal=remember(u.flow.epoch) {Animatable(0f)}
+ val metricValues=u.analysis?.optJSONObject("skinMetrics")?.toString()
+ LaunchedEffect(metricValues) {metricReveal.snapTo(0f);if(metricValues!=null) metricReveal.animateTo(1f,tween(240))}
  val settings=remember { context.getSharedPreferences("mirror-v2",0) }
  var showServer by remember { mutableStateOf(false) };var server by remember { mutableStateOf(settings.getString("server",MirrorApi().base).orEmpty()) };var serverError by remember { mutableStateOf("") }
  LaunchedEffect(Unit) { if(server!=MirrorApi().base) model.changeServer(server) }
@@ -85,10 +96,11 @@ private val MirrorRose=Color(0xff865364)
     }
    }
    if(u.flow.stage!=Stage.HOME || chat) Surface(Modifier.offset(geometry.panel.x.dp,geometry.panel.y.dp).size(geometry.panel.width.dp,geometry.panel.height.dp).testTag(if(chat) "assistant-panel" else "info-panel"),color=MirrorPaper.copy(alpha=.94f),shape=RoundedCornerShape(topStart=22.dp,topEnd=22.dp),tonalElevation=0.dp,border=BorderStroke(1.dp,Color.White.copy(alpha=.8f))) {
+    Box(Modifier.fillMaxSize().clipToBounds().graphicsLayer {alpha=panelAlpha.value}) {
     if(activeDetail!=null) MirrorDetailPane(activeDetail,u,model,::closeDetail) else Column(Modifier.padding(horizontal=16.dp)) {
      if(chat) {
       Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween){Text("小妆",style=MaterialTheme.typography.titleMedium);TextButton(onClick={stopVoice();chat=false}){Text("关闭",fontSize=12.sp)}}
-      Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {CompactReply(u.reply,restoreFocus=="assistant",{restoreFocus=null}) {showDetail("小妆回复",u.reply)};if(u.message.isNotBlank()) Text(u.message,color=MaterialTheme.colorScheme.error)}
+      Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(chatScroll)) {CompactReply(u.reply,restoreFocus=="assistant",{restoreFocus=null}) {showDetail("小妆回复",u.reply)};if(u.message.isNotBlank()) Text(u.message,color=MaterialTheme.colorScheme.error)}
       OutlinedTextField(text,{text=it},label={Text("输入问题或操作")},modifier=Modifier.fillMaxWidth(),maxLines=2,textStyle=MaterialTheme.typography.bodyMedium)
       Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
        TextButton(onClick={if(recording) {val epoch=model.ui.value.flow.epoch;try {val bytes=voice.finish();recording=false;cloudJob=scope.launch {try {val transcript=model.transcribe(bytes,epoch);if(model.ui.value.flow.epoch==epoch) submitText(transcript)} catch(e:kotlinx.coroutines.CancellationException){throw e} catch(e:Exception){model.message(e.message ?: "识别失败，请重试")}}} catch(e:Exception){stopVoice();model.message(e.message ?: "录音失败")}} else microphone.launch(Manifest.permission.RECORD_AUDIO)}){Text(if(recording) "完成识别" else "语音输入",fontSize=12.sp)}
@@ -101,14 +113,14 @@ private val MirrorRose=Color(0xff865364)
      } else {
       if(u.flow.stage !in listOf(Stage.ALIGN,Stage.ANALYZE)) TextButton(onClick={expanded=!expanded},modifier=Modifier.align(Alignment.CenterHorizontally).height(34.dp)){Text(if(expanded) "⌄ 收起面板" else "⌃ 展开面板",fontSize=11.sp,color=Color(0xff7b6871))} else Spacer(Modifier.height(14.dp))
       if(expanded) {
-       Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(remember(u.flow.stage) {ScrollState(0)}).testTag("panel-scroll")) {
+       Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(panelScroll).testTag("panel-scroll")) {
         if(u.message.isNotBlank()) Text(u.message,color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodySmall)
         if(u.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         when(u.flow.stage) {
          Stage.ALIGN->{Text("面部定位",style=MaterialTheme.typography.titleLarge);Spacer(Modifier.height(8.dp));Text(hint);Text("请正对镜头，保持光线均匀。",style=MaterialTheme.typography.bodySmall,color=Color(0xff7b6871))}
          Stage.ANALYZE->{Text("正在分析",style=MaterialTheme.typography.titleLarge);Spacer(Modifier.height(8.dp));Text("请稍候")}
          Stage.RESULTS->{
-          CompactReport(u.analysis,restoreFocus=="report",{restoreFocus=null}) {showDetail("完整报告",MirrorPresentation.analysisReport(u.analysis))}
+          CompactReport(u.analysis,restoreFocus=="report",{restoreFocus=null},metricReveal.value) {showDetail("完整报告",MirrorPresentation.analysisReport(u.analysis))}
           if(u.analysis?.optString("explanationStatus")=="failed") TextButton(onClick=model::retryExplanation){Text("重试解读")}
 
          }
@@ -119,7 +131,7 @@ private val MirrorRose=Color(0xff865364)
            Row(verticalAlignment=Alignment.CenterVertically){Text("妆效浓淡");Slider(value=u.intensity,onValueChange=model::intensity,colors=SliderDefaults.colors(thumbColor=MirrorRose,activeTrackColor=MirrorRose,inactiveTrackColor=Color(0xffe6dcda)),modifier=Modifier.weight(1f).padding(start=12.dp))}
            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically){Row(Modifier.clickable {model.original(!u.original)},verticalAlignment=Alignment.CenterVertically){Checkbox(u.original,model::original,colors=CheckboxDefaults.colors(checkedColor=MirrorRose,uncheckedColor=Color(0xff9c8d93),checkmarkColor=Color.White));Text("原貌对照")};TextButton(onClick=model::clearEffect){Text("清除妆效",fontSize=12.sp)}}
           } else if(u.flow.stage==Stage.GENERATE){Text("正在生成",style=MaterialTheme.typography.titleLarge);Text("请稍候")}
-          else {CompactCatalog(u,model,restoreFocus,{restoreFocus=null}) {product,picking->
+          else {CompactCatalog(u,model,restoreFocus,{restoreFocus=null},categoryScroll,productScroll) {product,picking->
            if(model.ui.value.flow.epoch==u.flow.epoch) detail=MirrorDetail(u.flow.epoch,if(picking) "选择规格" else "产品详情",productDetail(u,product),product,picking)
           }}
           Text("已选 ${u.flow.items.size} 款 · 每类最多一款",modifier=Modifier.testTag("selection-count"),fontSize=11.sp,lineHeight=14.sp,color=Color(0xff7b6871))
@@ -142,6 +154,7 @@ private val MirrorRose=Color(0xff865364)
        }
       }
      }
+    }
     }
    }
   }

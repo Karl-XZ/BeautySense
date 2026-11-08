@@ -78,6 +78,24 @@ class MirrorModeTest {
    (find(root,MeshView::class.java) as? MeshView)?.frame?.bytes?.let {inst.targetContext.cacheDir.resolve("v2-camera-probe.jpg").writeBytes(it)}
    (find(root,PreviewView::class.java) as? PreviewView)?.bitmap?.let {bitmap->inst.targetContext.cacheDir.resolve("v2-preview-probe.png").outputStream().use {bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)};bitmap.recycle()}
   }
+  // Lower-pane motion must never replace the live camera or interrupt its analyzer.
+  val previewBefore=AtomicReference<View>();val meshBefore=AtomicReference<View>()
+  inst.runOnMainSync {
+   previewBefore.set(find(activity.get().window.decorView,PreviewView::class.java))
+   meshBefore.set(find(activity.get().window.decorView,MeshView::class.java))
+  }
+  repeat(3) {
+   for(action in listOf("小妆","关闭")) {
+    val before=delivered;click(action);inspect()
+    inst.runOnMainSync {
+     assertTrue("Pane changes preserve the same camera view",previewBefore.get()===find(activity.get().window.decorView,PreviewView::class.java))
+     assertTrue("Pane changes preserve the same mesh view",meshBefore.get()===find(activity.get().window.decorView,MeshView::class.java))
+    }
+    assertTrue("Camera stays open during pane transitions",streaming && cameraInfo.cameraState.value?.type==CameraState.Type.OPEN)
+    assertTrue("Camera analyzer survives pane transitions",delivered>=before && System.currentTimeMillis()-stamp in 0..2_000)
+   }
+  }
+  inst.sendStatus(0,android.os.Bundle().apply {putString("panelCameraContinuity","passed")})
   click("退出")
   val end=android.os.SystemClock.elapsedRealtime()+10_000
   while(android.os.SystemClock.elapsedRealtime()<end) {inspect();if(!streaming && stamp==0L && cameraInfo.cameraState.value?.type==CameraState.Type.CLOSED) break;Thread.sleep(50)}
