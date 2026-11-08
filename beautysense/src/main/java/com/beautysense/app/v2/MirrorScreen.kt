@@ -16,6 +16,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextOverflow
@@ -35,6 +37,7 @@ private val MirrorRose=Color(0xff865364)
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable fun MirrorScreen(model:MirrorViewModel,synthetic:android.graphics.Bitmap?=null) {
  val u by model.ui.collectAsState(); val context=LocalContext.current
+ val keyboard=LocalSoftwareKeyboardController.current;val focus=LocalFocusManager.current
  var valid by remember { mutableStateOf(false) }; var hint by remember { mutableStateOf("请将完整面部放入椭圆内") }
  var expanded by remember { mutableStateOf(true) }; var chat by remember { mutableStateOf(false) }; var text by remember { mutableStateOf("") }; var resetConfirm by remember { mutableStateOf(false) }
  val settings=remember { context.getSharedPreferences("mirror-v2",0) }
@@ -56,7 +59,7 @@ private val MirrorRose=Color(0xff865364)
  Column(Modifier.fillMaxSize().background(MirrorPaper).windowInsetsPadding(WindowInsets.safeDrawing).imePadding().semantics {testTagsAsResourceId=true}) {
   Row(Modifier.fillMaxWidth().height(60.dp).padding(horizontal=12.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween) {
    TextButton(onClick={if(u.flow.stage==Stage.HOME) showServer=true else model.reset(true)}) {Text(if(u.flow.stage==Stage.HOME) "设置" else "退出")}
-   Column(horizontalAlignment=Alignment.CenterHorizontally) {Text("妆伴  BEAUTYSENSE",fontSize=17.sp,fontWeight=FontWeight.SemiBold);Text(stageLabel(u.flow.stage),fontSize=10.sp,color=Color(0xff7b6871))}
+   Column(Modifier.weight(1f),horizontalAlignment=Alignment.CenterHorizontally) {Text("妆伴  BEAUTYSENSE",fontSize=17.sp,fontWeight=FontWeight.SemiBold,maxLines=1,overflow=TextOverflow.Ellipsis);Text(stageLabel(u.flow.stage),fontSize=10.sp,color=Color(0xff7b6871))}
    OutlinedButton(onClick={chat=!chat;expanded=true},contentPadding=PaddingValues(horizontal=12.dp),modifier=Modifier.height(38.dp),shape=RoundedCornerShape(20.dp)){Text("小妆",fontSize=12.sp)}
   }
   HorizontalDivider(color=Color(0xffe8deda))
@@ -92,14 +95,14 @@ private val MirrorRose=Color(0xff865364)
        TextButton(onClick={if(recording) {val epoch=model.ui.value.flow.epoch;try {val bytes=voice.finish();recording=false;cloudJob=scope.launch {try {val transcript=model.transcribe(bytes,epoch);if(model.ui.value.flow.epoch==epoch) submitText(transcript)} catch(e:kotlinx.coroutines.CancellationException){throw e} catch(e:Exception){model.message(e.message ?: "识别失败，请重试")}}} catch(e:Exception){stopVoice();model.message(e.message ?: "录音失败")}} else microphone.launch(Manifest.permission.RECORD_AUDIO)}){Text(if(recording) "完成识别" else "语音输入",fontSize=12.sp)}
        TextButton(onClick={stopVoice();val epoch=model.ui.value.flow.epoch;val generation=voice.generation;cloudJob=scope.launch {try {val url=model.speechUrl(u.reply,epoch);if(model.ui.value.flow.epoch==epoch) voice.play(url,generation)} catch(e:kotlinx.coroutines.CancellationException){throw e} catch(e:Exception){model.message(e.message ?: "朗读失败，请重试")}}},enabled=u.reply.isNotBlank()){Text("朗读",fontSize=12.sp)}
        TextButton(onClick={stopVoice()}){Text("停止",fontSize=12.sp)}
-       Button(onClick={submitText(text);text=""},enabled=text.isNotBlank()){Text("发送",fontSize=12.sp)}
+       Button(onClick={submitText(text);text="";focus.clearFocus();keyboard?.hide()},enabled=text.isNotBlank()){Text("发送",fontSize=12.sp)}
       }
      } else if(resetConfirm||u.confirmReanalysis) {
       Spacer(Modifier.height(20.dp));Text("重新分析？",style=MaterialTheme.typography.titleLarge);Spacer(Modifier.height(10.dp));Text("将清空当前选品与试妆效果，重新定位面部。",Modifier.weight(1f));Row(Modifier.padding(bottom=12.dp),horizontalArrangement=Arrangement.spacedBy(10.dp)){OutlinedButton(onClick={resetConfirm=false;model.dismissReanalysis()},modifier=Modifier.weight(1f)){Text("取消")};Button(onClick={resetConfirm=false;model.reset()},modifier=Modifier.weight(1f)){Text("确定")}}
      } else {
       if(u.flow.stage !in listOf(Stage.ALIGN,Stage.ANALYZE)) TextButton(onClick={expanded=!expanded},modifier=Modifier.align(Alignment.CenterHorizontally).height(34.dp)){Text(if(expanded) "⌄ 收起面板" else "⌃ 展开面板",fontSize=11.sp,color=Color(0xff7b6871))} else Spacer(Modifier.height(14.dp))
       if(expanded) {
-       Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).testTag("panel-scroll")) {
+       Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(remember(u.flow.stage) {ScrollState(0)}).testTag("panel-scroll")) {
         if(u.message.isNotBlank()) Text(u.message,color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodySmall)
         if(u.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         when(u.flow.stage) {
